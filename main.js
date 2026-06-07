@@ -139,7 +139,8 @@ let appState = {
   layout: new Map(),
   connections: [],
   selectedPlayer: null,
-  selectedRankId: null
+  selectedRankId: null,
+  selectedRequirementName: null
 };
 
 function slugify(value) {
@@ -313,12 +314,18 @@ function parseRank(row, index, registry) {
   };
 }
 
+function parseCoordinate(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 50;
+  return Math.min(95, Math.max(5, parsed));
+}
+
 function parseLayout(rows) {
   return new Map(rows.map(row => {
     const name = getField(row, 'name', 'rank');
     return [slugify(name), {
-      x: Number(getField(row, 'x')) || 50,
-      y: Number(getField(row, 'y')) || 50,
+      x: parseCoordinate(getField(row, 'x')),
+      y: parseCoordinate(getField(row, 'y')),
       icon: getField(row, 'icon') || `${slugify(name)}.png`
     }];
   }).filter(([id]) => id));
@@ -372,7 +379,7 @@ function getPlayerProgress(player) {
   }));
   const completedRanks = ranked.filter(rank => rank.status === 'completed');
   const currentRank = completedRanks[completedRanks.length - 1]?.name || getField(player, 'Ranking', 'rank', 'current rank') || 'Unranked';
-  const nextRank = ranked.find(rank => rank.status !== 'completed');
+  const nextRank = ranked.find(rank => rank.status === 'available') || ranked.find(rank => rank.status !== 'completed');
   const highestRemaining = [...ranked].reverse().find(rank => rank.status !== 'completed');
 
   return {
@@ -464,17 +471,52 @@ function renderNodes(progress) {
   });
 }
 
-function renderDetailRequirement(requirement, player) {
+function renderDetailRequirement(requirement, player, index) {
   const done = requirementDone(player, requirement.name);
+  const selected = appState.selectedRequirementName === requirement.name;
   return `
-    <div class="req-row ${done ? 'done' : 'pending'}">
+    <button type="button" class="req-row req-button ${done ? 'done' : 'pending'}${selected ? ' selected' : ''}" data-req-index="${index}">
       <div class="req-circle">${done ? '✓' : '○'}</div>
-      <div>
-        <div class="req-name">${escapeHtml(requirement.name)}</div>
-        <div class="req-description">${escapeHtml(requirement.description || 'No description provided.')}</div>
-      </div>
-    </div>
+      <div class="req-name">${escapeHtml(requirement.name)}</div>
+    </button>
   `;
+}
+
+function getRequirementDetails(requirement) {
+  const registryMatch = appState.reqRegistry.get(normalizeKey(requirement?.name));
+  return {
+    name: registryMatch?.name || requirement?.name || '',
+    type: registryMatch?.type || requirement?.type || 'Requirement',
+    description: registryMatch?.description || requirement?.description || 'No description provided.'
+  };
+}
+
+function renderRequirementDetails(requirement) {
+  const nameEl = document.getElementById('requirementDetailName');
+  const typeEl = document.getElementById('requirementDetailType');
+  const descEl = document.getElementById('requirementDetailDescription');
+
+  if (!requirement) {
+    nameEl.textContent = 'Select a requirement to view details.';
+    typeEl.textContent = '';
+    descEl.textContent = '';
+    return;
+  }
+
+  const details = getRequirementDetails(requirement);
+  nameEl.textContent = details.name;
+  typeEl.textContent = `Type: ${details.type}`;
+  descEl.textContent = details.description;
+}
+
+function selectRequirement(rank, requirementIndex) {
+  const requirement = rank.requirements[requirementIndex];
+  if (!requirement) return;
+  appState.selectedRequirementName = requirement.name;
+  document.querySelectorAll('.req-button').forEach(button => {
+    button.classList.toggle('selected', Number(button.dataset.reqIndex) === requirementIndex);
+  });
+  renderRequirementDetails(requirement);
 }
 
 function renderReward(reward, index) {
@@ -491,16 +533,22 @@ function selectNode(id) {
   const rank = progress.ranks.find(item => item.id === id) || progress.nextRank || progress.ranks[0];
   if (!rank) return;
 
+  if (appState.selectedRankId !== rank.id) appState.selectedRequirementName = null;
   appState.selectedRankId = rank.id;
   document.getElementById('detailIcon').innerHTML = iconImage(rank, 'detail-rank-icon-img');
   document.getElementById('detailTitle').textContent = rank.name.toUpperCase();
   document.getElementById('detailSub').textContent = statusLabel(rank.status);
   document.getElementById('detailLore').textContent = rank.description || 'No rank description provided.';
-  document.getElementById('additionalLore').textContent = rank.lore || 'No additional lore recorded for this rank.';
-  document.getElementById('detailReqs').innerHTML = rank.requirements.map(req => renderDetailRequirement(req, appState.selectedPlayer)).join('') || '<div class="req-row pending">No requirements listed.</div>';
+  document.getElementById('detailReqs').innerHTML = rank.requirements.map((req, index) => renderDetailRequirement(req, appState.selectedPlayer, index)).join('') || '<div class="req-row pending">No requirements listed.</div>';
   document.getElementById('detailRewards').innerHTML = rank.rewards.map(renderReward).join('') || '<div class="reward-tile"><div class="reward-tile-icon">✦</div><div class="reward-tile-name">No rewards listed</div></div>';
 
   document.querySelectorAll('.node').forEach(node => node.classList.toggle('selected', node.dataset.rankId === rank.id));
+  document.querySelectorAll('.req-button').forEach(button => {
+    button.addEventListener('click', () => selectRequirement(rank, Number(button.dataset.reqIndex)));
+  });
+
+  const selectedRequirement = rank.requirements.find(req => req.name === appState.selectedRequirementName);
+  renderRequirementDetails(selectedRequirement);
 }
 
 function drawPaths(progress = getPlayerProgress(appState.selectedPlayer)) {
@@ -583,6 +631,7 @@ async function init() {
   document.getElementById('playerSelect').addEventListener('change', event => {
     appState.selectedPlayer = appState.players[Number(event.target.value)];
     appState.selectedRankId = null;
+    appState.selectedRequirementName = null;
     renderApp();
   });
 
