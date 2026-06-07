@@ -505,3 +505,58 @@ html, body {
 @keyframes pathFlow { to { stroke-dashoffset: -48; } }
 .path-solid { stroke-dasharray: none; animation: none; }
 .path-dim { stroke-dasharray: 4 6; opacity: 0.3; animation: none; }
+
+/* ─── SHEET-DRIVEN PLAYER CONTROLS ─── */
+.player-select {
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(12,8,18,0.95);
+  color: var(--text);
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  outline: none;
+}
+.player-select:focus { border-color: var(--purple); box-shadow: 0 0 12px rgba(155,109,255,0.2); }
+.player-card { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.current-rank-icon { background: rgba(155,109,255,0.18); box-shadow: 0 0 10px rgba(155,109,255,0.25); overflow: hidden; }
+.sidebar-rank-icon-img,
+.rank-icon-img,
+.detail-rank-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: inherit;
+}
+
+/* Dynamic rank nodes retain the original card styling while using sheet x/y percentages. */
+.node {
+  appearance: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transform: translate(-50%, -50%);
+}
+.node:hover { transform: translate(-50%, calc(-50% - 2px)); }
+.node:focus-visible { outline: 1.5px solid rgba(155,109,255,0.7); outline-offset: 3px; }
+.node.selected { outline: 1.5px solid rgba(155,109,255,0.7); z-index: 10; }
+.node-completed { border-color: rgba(96,208,144,0.4); box-shadow: 0 0 20px rgba(96,208,144,0.1), inset 0 0 20px rgba(96,208,144,0.03); }
+.node-available { border-color: rgba(155,109,255,0.5); box-shadow: 0 0 24px rgba(155,109,255,0.15); }
+.node-locked { border-color: var(--border); opacity: 0.65; }
+.node-locked:hover { opacity: 0.8; }
+.node-icon-wrap { background: rgba(155,109,255,0.18); box-shadow: 0 0 10px rgba(155,109,255,0.25); overflow: hidden; }
+.s-completed .status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.s-completed { color: var(--green); }
+.req-row { align-items: flex-start; }
+.req-name { color: inherit; }
+.req-description { margin-top: 2px; color: var(--text3); font-size: 11px; font-style: italic; line-height: 1.35; }
+.detail-icon { overflow: hidden; }
+
+.ring-fill { transition: stroke-dashoffset 0.35s ease; animation: none; }
+.path-completed { filter: drop-shadow(0 0 5px currentColor); stroke-dasharray: none; opacity: 0.95; }
+.path-available { filter: drop-shadow(0 0 5px currentColor); animation: pathFlow 3s linear infinite; stroke-dasharray: 8 8; }
+.path-locked { stroke-dasharray: 4 6; opacity: 0.3; animation: none; }
+.node-available.pulse { animation: pulseBorder 2s ease-in-out infinite; }
