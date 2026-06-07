@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Circle of Mages</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-logo">
+      <div class="logo-icon">✦</div>
+      <span class="logo-text">The Circle of Mages</span>
+    </div>
+    <nav class="topbar-nav">
+      <button class="nav-btn active"><span class="nav-icon">🎁</span> Guild Progress</button>
+      <button class="nav-btn"><span class="nav-icon">🏅</span> Ranks & Rewards</button>
+      <button class="nav-btn"><span class="nav-icon">📖</span> Lore</button>
+      <button class="nav-btn"><span class="nav-icon">👥</span> Members</button>
+    </nav>
+    <div class="topbar-user">
+      <div class="user-avatar">AL</div>
+      <span class="user-name">Archmage Lyra</span>
+      <span style="color:var(--text3);font-size:10px;">▾</span>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- LEFT PANEL -->
+    <aside class="left-panel">
+      <div>
+        <div class="panel-section-title">Guild Progress</div>
+        <div class="progress-ring-wrap">
+          <div class="prog-label">Overall Completion</div>
+          <div class="ring-container">
+            <svg class="ring-svg" viewBox="0 0 100 100">
+              <circle class="ring-bg" cx="50" cy="50" r="42"/>
+              <circle class="ring-fill" cx="50" cy="50" r="42"/>
+            </svg>
+            <div class="ring-text-wrap" style="position:absolute;text-align:center;">
+              <div class="ring-pct">64%</div>
+              <div class="ring-sub">9 / 14 done</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-divider"></div>
+
+      <div>
+        <div class="panel-section-title">Next Available</div>
+        <div class="sidebar-item" onclick="selectNode('ashen')">
+          <div class="sidebar-item-icon si-purple">🏔️</div>
+          <div class="sidebar-item-info">
+            <div class="si-name">Ashen Spire</div>
+            <div class="si-desc">Complete both paths to unlock</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-divider"></div>
+
+      <div>
+        <div class="panel-section-title">Final Goal</div>
+        <div class="sidebar-item" onclick="selectNode('void')">
+          <div class="sidebar-item-icon si-gray">🔒</div>
+          <div class="sidebar-item-info">
+            <div class="si-name">Void Throne</div>
+            <div class="si-desc">Complete the final challenge</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-divider"></div>
+
+      <div class="lore-quote">
+        "Together we weave the threads of fate, until the void itself bows to our will."
+      </div>
+      <button class="view-lore-btn">📖 View Lore</button>
+    </aside>
+
+    <!-- MAP CANVAS -->
+    <div class="map-canvas" id="mapCanvas">
+      <div class="arcane-circle"></div>
+
+      <!-- PATH SVG -->
+      <svg class="map-svg" id="pathSvg"></svg>
+
+      <!-- INITIATE -->
+      <div class="node node-initiate" id="node-initiate" onclick="selectNode('initiate')">
+        <div class="node-header">
+          <div class="node-icon-wrap ni-green">🕯️</div>
+          <div class="node-title-group">
+            <div class="node-title">Initiate</div>
+            <div class="node-status s-complete"><span class="status-dot"></span> Completed</div>
+          </div>
+        </div>
+        <div class="node-body">
+          <div class="node-desc">Offering to Goddess Freyja</div>
+        </div>
+      </div>
+
+      <!-- ENCHANTER -->
+      <div class="node node-enchanter" id="node-enchanter" onclick="selectNode('enchanter')">
+        <div class="node-header">
+          <div class="node-icon-wrap ni-blue">✨</div>
+          <div class="node-title-group">
+            <div class="node-title">Enchanter</div>
+            <div class="node-status s-complete"><span class="status-dot"></span> Completed</div>
+          </div>
+        </div>
+        <div class="node-body">
+          <div class="node-checklist">
+            <div class="check-item done"><span class="check-icon c">✓</span> Advanced Arcane Arts</div>
+            <div class="check-item done"><span class="check-icon c">✓</span> 30 Influence Points</div>
+            <div class="check-item done"><span class="check-icon c">✓</span> Here Lies the Abyss</div>
+            <div class="check-item done"><span class="check-icon c">✓</span> Horcrux Hunt</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ARCHMAGE -->
+      <div class="node node-archmage" id="node-archmage" onclick="selectNode('archmage')">
+        <div class="node-header">
+          <div class="node-icon-wrap ni-gold">👑</div>
+          <div class="node-title-group">
+            <div class="node-title">Archmage</div>
+            <div class="node-status s-locked"><span class="status-dot"></span><span>🔒</span> Locked</div>
+          </div>
+        </div>
+        <div class="node-body">
+          <div class="node-checklist">
+            <div class="check-item"><span class="check-icon x">○</span> Expert Arcane Arts</div>
+            <div class="check-item"><span class="check-icon x">○</span> 70 Influence Points</div>
+            <div class="check-item"><span class="check-icon x">○</span> Win at Mage Duels</div>
+            <div class="check-item"><span class="check-icon x">○</span> 4 Arcane Masteries</div>
+            <div class="check-item"><span class="check-icon x">○</span> What Pride Had Wrought</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EMBER CITADEL -->
+      <div class="node node-ember" id="node-ember" onclick="selectNode('ember')">
+        <div class="node-header">
+          <div class="node-icon-wrap ni-orange">🔥</div>
+          <div class="node-title-group">
+            <div class="node-title">Ember Citadel</div>
+            <div class="node-status s-complete"><span class="status-dot"></span> Completed</div>
+          </div>
+        </div>
+        <div class="node-body">
+          <div class="node-desc">Defeat the Ember Lord</div>
+        </div>
+      </div>
+
+      <!-- DROWNED VAULT -->
+      <div class="node node-vault" id="node-vault" onclick="selectNode('vault')">
+        <div class="node-header">
+          <div class="node-icon-wrap ni-blue">💧</div>
+          <div class="node-title-group">
+            <div class="node-title">Drowned Vault</div>
+            <div class="node-status s-complete"><span class="status-dot"></span> Completed</div>
+          </div>
+        </div>
+        <div class="node-body">
+          <div class="node-desc">Conquer the Drowned Keep</div>
+        </div>
+      </div>
+
+      <!-- ASHEN SPIRE -->
+      <div class="node node-ashen pulse" id="node-ashen" onclick="selectNode('ashen')">
+        <div class="node-header">
+          <div class="node-icon-wrap ni-purple">🏔️</div>
+          <div class="node-title-group">
+            <div class="node-title">Ashen Spire</div>
+            <div class="node-status s-available"><span class="status-dot"></span> Available</div>
+          </div>
+        </div>
+        <div class="node-body">
+          <div class="node-desc">Complete both paths to unlock this rank</div>
+        </div>
+      </div>
+
+      <!-- VOID THRONE -->
+      <div class="node node-void" id="node-void" onclick="selectNode('void')">
+        <div class="node-header">
+          <div class="node-icon-wrap ni-gray">🔒</div>
+          <div class="node-title-group">
+            <div class="node-title">Void Throne</div>
+            <div class="node-status s-locked"><span class="status-dot"></span> Locked</div>
+          </div>
+        </div>
+        <div class="node-body">
+          <div class="node-desc">Complete Ashen Spire to unlock the final challenge</div>
+        </div>
+      </div>
+
+    </div><!-- /map-canvas -->
+
+    <!-- RIGHT PANEL -->
+    <aside class="right-panel" id="rightPanel">
+      <div class="detail-header">
+        <div class="detail-icon" id="detailIcon">🏔️</div>
+        <div>
+          <div class="detail-title" id="detailTitle">ASHEN SPIRE</div>
+          <div class="detail-subtitle" id="detailSub">Rank Details</div>
+        </div>
+      </div>
+
+      <div class="detail-lore" id="detailLore">
+        The spire rises from ash and shadow. Only those who have proven themselves in fire and water may ascend.
+      </div>
+
+      <div>
+        <div class="detail-section-title">REQUIREMENTS</div>
+        <div class="req-list" id="detailReqs">
+          <div class="req-row done"><div class="req-circle">✓</div> Complete Ember Citadel</div>
+          <div class="req-row done"><div class="req-circle">✓</div> Complete Drowned Vault</div>
+          <div class="req-row pending"><div class="req-circle">○</div> Defeat the Ashen Guardian</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="detail-section-title">REWARDS</div>
+        <div class="rewards-grid" id="detailRewards">
+          <div class="reward-tile"><div class="reward-tile-icon">🧥</div><div class="reward-tile-name">Ashen Robes</div></div>
+          <div class="reward-tile"><div class="reward-tile-icon">🐉</div><div class="reward-tile-name">Spire Mount</div></div>
+          <div class="reward-tile"><div class="reward-tile-icon">🔮</div><div class="reward-tile-name">Arcane Core</div></div>
+          <div class="reward-tile"><div class="reward-tile-icon">⚔️</div><div class="reward-tile-name">500 Influence</div></div>
+          <div class="reward-tile"><div class="reward-tile-icon">🏅</div><div class="reward-tile-name">Legendary Title</div></div>
+          <div class="reward-tile"><div class="reward-tile-icon">🌀</div><div class="reward-tile-name">Guild Emblem</div></div>
+        </div>
+      </div>
+
+      <button class="view-details-btn">View Full Details →</button>
+    </aside>
+
+  </div><!-- /main -->
+
+  <!-- BOTTOM BAR -->
+  <footer class="bottom-bar">
+    <div class="bottom-icon">✦</div>
+    <div class="bottom-text">
+      <div class="bottom-title">THE PATH TO GREATNESS</div>
+      <div class="bottom-desc">Complete all ranks to unlock the <b>Void Throne</b> and secure your guild's legacy in the annals of magic.</div>
+    </div>
+    <button class="view-all-btn">🎁 View All Rewards</button>
+  </footer>
+
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>
