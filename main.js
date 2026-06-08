@@ -239,8 +239,10 @@ function renderNodes(prog) {
     node.type='button';
     node.className=`node node-${rank.status}${rank.status==='available'?' pulse':''}`;
     node.id=`node-${rank.id}`;
-    node.style.cssText=`left:${layout.x}%;top:${layout.y}%`;
     node.dataset.rankId=rank.id;
+    // Set position individually — cssText would wipe transition
+    node.style.left = `${layout.x}%`;
+    node.style.top  = `${layout.y}%`;
     node.innerHTML=`
       <div class="node-header">
         <div class="node-icon-wrap">${iconImg(rank)}</div>
@@ -421,10 +423,11 @@ function renderApp() {
   renderSelector();
   renderSidebar(prog);
   renderNodes(prog);
-  requestAnimationFrame(()=>{
+  // Double rAF: first frame nodes are inserted, second frame they have layout
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
     drawPaths(prog);
     selectNode(S.selectedRankId||prog.nextRank?.id||prog.ranks[0]?.id);
-  });
+  }));
 }
 
 async function refresh() {
@@ -458,4 +461,4 @@ async function init() {
 
 let rafResize;
 window.addEventListener('resize',()=>{ cancelAnimationFrame(rafResize); rafResize=requestAnimationFrame(()=>drawPaths()); });
-window.addEventListener('load',init);
+window.addEventListener('DOMContentLoaded', init);
