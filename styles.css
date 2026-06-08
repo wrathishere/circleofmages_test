@@ -29,7 +29,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Crimso
 .user-caret{color:var(--text3);font-size:9px}
 
 /* ── MAIN ── */
-.main{display:flex;flex:1;overflow:hidden;min-height:0}
+.main{display:flex;flex:1;overflow:hidden;min-height:0;height:0}
 
 /* ── LEFT PANEL ── */
 .left-panel{width:var(--left-w);flex-shrink:0;background:rgba(10,6,14,.92);border-right:1px solid var(--border);padding:16px 13px;display:flex;flex-direction:column;gap:14px;overflow-y:auto}
@@ -113,7 +113,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Crimso
 @keyframes pathFlow{to{stroke-dashoffset:-48}}
 
 /* ── RIGHT PANEL ── */
-.right-panel{width:var(--right-w);flex-shrink:0;background:rgba(10,6,14,.93);border-left:1px solid var(--border);padding:16px 14px;display:flex;flex-direction:column;gap:13px;overflow-y:auto}
+.right-panel{width:var(--right-w);flex-shrink:0;position:relative;background:rgba(10,6,14,.93);border-left:1px solid var(--border);padding:16px 14px;display:flex;flex-direction:column;gap:13px;overflow-y:auto}
 .drawer-close{display:none;position:absolute;top:12px;right:12px;width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--text2);font-size:13px;cursor:pointer;align-items:center;justify-content:center;transition:border-color .2s;z-index:1;flex-shrink:0}
 .drawer-close:hover{border-color:var(--purple)}
 .detail-header{display:flex;gap:11px;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid var(--border)}
