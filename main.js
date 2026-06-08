@@ -1,628 +1,461 @@
-// ─── GOOGLE SHEETS CONFIG ───
+// ─── CONFIG ───
 const SHEET_ID = '1FFEg75S6-HKlN58pMROvtTkBry1FYGrVruPsUbaf4qA';
-const SHEET_NAMES = {
-  ranks: 'ranks',
-  requirements: 'reqs',
-  tracker: 'tracker',
-  layout: 'nodelayout'
-  // No separate connections sheet — connections are read from nodelayout conn1/conn2/conn3
-};
+const SHEET_NAMES = { ranks: 'ranks', reqs: 'reqs', influenceTasks: 'influence points', tracker: 'tracker', layout: 'nodelayout' };
 const RANK_ICON_PATH = 'images/ranks/';
 const DEFAULT_RANK_ICON = `${RANK_ICON_PATH}default.png`;
 
-// ─── FALLBACK DATA (mirrors your actual sheet structure) ───
-const FALLBACK_SHEET_DATA = {
+// ─── FALLBACK DATA ───
+const FALLBACK = {
   ranks: [
-    {
-      name: 'Initiate',
-      description: 'Every great mage begins with a single candle lit in devotion.',
-      lore: 'The first flame is small, but it remembers the shape of every future star.',
-      rewards: 'L7 Pointy Hat; Sparkler; Arcane Studies; Wisp Garden',
-      req1: 'Offering to Goddess Freyja'
-    },
-    {
-      name: 'Apprentice',
-      description: 'The foundations of magic take root. You are learning to listen to the weave.',
-      lore: 'Patience is the first spell every apprentice must master.',
-      rewards: 'Apprentice Robes; Herb Pouch; Rune Tablet',
-      req1: 'Novice Herbalism',
-      req2: 'Novice Potion-making',
-      req3: 'Novice Runework'
-    },
-    {
-      name: 'Enchanter',
-      description: 'The threads of arcane weave between your fingers like old friends.',
-      lore: 'The circle recognizes those who can bind power without being bound by it.',
-      rewards: 'L1 Feather Cape; Hat → L17; L6 Eitr Robes; 2 Bloodstones',
-      'influence points': '30',
-      req1: 'Advanced Herbalism',
-      req2: 'Advanced Potion-making',
-      req3: 'Advanced Runework',
-      req4: 'The Harrowing',
-      req5: 'Here Lies the Abyss',
-      req6: 'Horcrux Hunt'
-    },
-    {
-      name: 'Archmage',
-      description: 'The apex of mortal mastery. Only those who have conquered everything may claim this title.',
-      lore: 'A crown is not worn by the Archmage; it orbits them like a loyal moon.',
-      rewards: 'L22 Staff; Embla Hood; Linen Cape; Lava Bombs',
-      'influence points': '70',
-      req1: 'Expert Herbalism',
-      req2: 'Expert Potion-making',
-      req3: 'Expert Runework'
-    }
+    { name:'Initiate',   description:'Every great mage begins with a single candle.', lore:'The first flame remembers the shape of every future star.', rewards:'L7 Pointy Hat; Sparkler; Arcane Studies', req1:'Offering to Goddess Freyja' },
+    { name:'Apprentice', description:'The foundations of magic take root.', lore:'Patience is the first spell.', rewards:'Apprentice Robes; Herb Pouch; Rune Tablet', req1:'Novice Herbalism', req2:'Novice Potion-making', req3:'Novice Runework' },
+    { name:'Enchanter',  description:'The threads of arcane weave between your fingers.', lore:'The circle recognizes those who can bind power.', rewards:'Feather Cape; Eitr Robes; 2 Bloodstones', 'influence points':'30', req1:'Advanced Herbalism', req2:'Advanced Potion-making', req3:'Advanced Runework', req4:'The Harrowing', req5:'Here Lies the Abyss', req6:'Horcrux Hunt' },
+    { name:'Archmage',   description:'The apex of mortal mastery.', lore:'A crown orbits the Archmage like a loyal moon.', rewards:'L22 Staff; Embla Hood; Lava Bombs', 'influence points':'70', req1:'Expert Herbalism', req2:'Expert Potion-making', req3:'Expert Runework' }
   ],
   reqs: [],
+  influenceTasks: [
+    { name:'Airbender',        Description:'Glide from a mountain to the ocean.', Points:'2' },
+    { name:'Happy Landing',    Description:'Fly and land at Spawn.',               Points:'2' },
+    { name:'The Floor is Lava',Description:'Jump between Basalt platforms.',       Points:'4' },
+    { name:'Excess Energies',  Description:'Donate 1 stack of Refined Eitr.',      Points:'4' },
+    { name:'Wandcrafter',      Description:'Donate two fully upgraded magic weapons.', Points:'6' }
+  ],
   tracker: [
-    {
-      'Player Name': 'Archmage Lyra',
-      Ranking: 'Enchanter',
-      'Influence Points': '30',
-      'Offering to Goddess Freyja': 'TRUE',
-      'Novice Herbalism': 'TRUE',
-      'Novice Potion-making': 'TRUE',
-      'Novice Runework': 'TRUE',
-      'The Harrowing': 'TRUE',
-      'Advanced Herbalism': 'TRUE',
-      'Advanced Potion-making': 'TRUE',
-      'Advanced Runework': 'TRUE',
-      'Here Lies the Abyss': 'FALSE',
-      'Horcrux Hunt': 'FALSE',
-      'Expert Herbalism': 'FALSE',
-      'Expert Potion-making': 'FALSE',
-      'Expert Runework': 'FALSE'
-    }
+    { 'Player Name':'Archmage Lyra','Ranking':'Enchanter','Influence Points':'34','Offering to Goddess Freyja':'TRUE','Novice Herbalism':'TRUE','Novice Potion-making':'TRUE','Novice Runework':'TRUE','The Harrowing':'TRUE','Advanced Herbalism':'TRUE','Advanced Potion-making':'TRUE','Advanced Runework':'TRUE','Here Lies the Abyss':'FALSE','Horcrux Hunt':'FALSE','Expert Herbalism':'FALSE','Expert Potion-making':'FALSE','Expert Runework':'FALSE','Airbender':'TRUE','Happy Landing':'TRUE','The Floor is Lava':'FALSE','Excess Energies':'FALSE','Wandcrafter':'FALSE' }
   ],
   nodelayout: [
-    { name: 'Initiate',   x: '50', y: '20', icon: 'initiate.png',   conn1: 'Apprentice' },
-    { name: 'Apprentice', x: '10', y: '15', icon: 'apprentice.png', conn1: 'Enchanter' },
-    { name: 'Enchanter',  x: '40', y: '25', icon: 'enchanter.png',  conn1: 'Archmage' },
-    { name: 'Archmage',   x: '15', y: '55', icon: 'archmage.png' }
+    { name:'Initiate',   x:'50', y:'12', conn1:'Apprentice' },
+    { name:'Apprentice', x:'25', y:'35', conn1:'Enchanter' },
+    { name:'Enchanter',  x:'70', y:'35', conn1:'Archmage' },
+    { name:'Archmage',   x:'50', y:'65' }
   ]
 };
 
-const rewardIcons = ['✦', '🎩', '🪄', '🧥', '🔮', '💎', '💣', '🧪', '🏅', '👑'];
+const REWARD_ICONS = ['✦','🎩','🪄','🧥','🔮','💎','💣','🧪','🏅','👑'];
 
-let appState = {
-  ranks: [],
-  reqRegistry: new Map(),
-  players: [],
-  layout: new Map(),
-  connections: [],
-  selectedPlayer: null,
-  selectedRankId: null,
-  selectedRequirementName: null
-};
+let S = { ranks:[], reqRegistry:new Map(), influenceTasks:[], players:[], layout:new Map(), connections:[], selectedPlayer:null, selectedRankId:null, selectedReqName:null };
 
-// ─── UTILITIES ───
-function slugify(value) {
-  return String(value || '').trim().toLowerCase()
-    .replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-function cleanIconFilename(value) {
-  return String(value || '').split('/').pop().replace(/[^a-zA-Z0-9._-]/g, '') || 'default.png';
-}
-
-function normalizeKey(value) {
-  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
-}
+// ─── UTILS ───
+const slugify = v => String(v||'').trim().toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+const esc     = v => String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const normKey = v => String(v||'').trim().toLowerCase().replace(/\s+/g,' ');
+const isTruthy= v => ['true','yes','y','1','complete','completed','done'].includes(String(v).trim().toLowerCase());
+const splitList=v => String(v||'').split(/[;|\n]+/).map(s=>s.trim()).filter(Boolean);
+const cleanIcon=v => String(v||'').split('/').pop().replace(/[^a-zA-Z0-9._-]/g,'')||'default.png';
 
 function getField(row, ...names) {
-  const entries = Object.entries(row || {});
-  for (const name of names) {
-    const wanted = normalizeKey(name);
-    const found = entries.find(([key]) => normalizeKey(key) === wanted);
+  const entries = Object.entries(row||{});
+  for (const n of names) {
+    const found = entries.find(([k])=>normKey(k)===normKey(n));
     if (found) return found[1];
   }
   return '';
 }
 
-function isTruthy(value) {
-  return ['true', 'yes', 'y', '1', 'complete', 'completed', 'done']
-    .includes(String(value).trim().toLowerCase());
-}
-
-function splitList(value) {
-  return String(value || '').split(/[;|\n]+/).map(s => s.trim()).filter(Boolean);
-}
-
-// ─── CSV / SHEET LOADING ───
-function csvUrl(sheetName) {
-  const params = new URLSearchParams({ tqx: 'out:csv', sheet: sheetName });
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?${params.toString()}`;
-}
+// ─── CSV ───
+const csvUrl = sheet => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?${new URLSearchParams({tqx:'out:csv',sheet})}`;
 
 function parseCsv(csv) {
-  const rows = [];
-  let current = '', row = [], inQuotes = false;
-  for (let i = 0; i < csv.length; i++) {
-    const char = csv[i], next = csv[i + 1];
-    if (char === '"' && inQuotes && next === '"') { current += '"'; i++; }
-    else if (char === '"') { inQuotes = !inQuotes; }
-    else if (char === ',' && !inQuotes) { row.push(current); current = ''; }
-    else if ((char === '\n' || char === '\r') && !inQuotes) {
-      if (char === '\r' && next === '\n') i++;
-      row.push(current);
-      if (row.some(c => c.trim())) rows.push(row);
-      row = []; current = '';
-    } else { current += char; }
+  const rows=[]; let cur='',row=[],inQ=false;
+  for (let i=0;i<csv.length;i++) {
+    const c=csv[i],n=csv[i+1];
+    if (c==='"'&&inQ&&n==='"'){cur+='"';i++;}
+    else if(c==='"'){inQ=!inQ;}
+    else if(c===','&&!inQ){row.push(cur);cur='';}
+    else if((c==='\n'||c==='\r')&&!inQ){
+      if(c==='\r'&&n==='\n')i++;
+      row.push(cur);
+      if(row.some(x=>x.trim()))rows.push(row);
+      row=[];cur='';
+    } else cur+=c;
   }
-  row.push(current);
-  if (row.some(c => c.trim())) rows.push(row);
-  if (!rows.length) return [];
-  const headers = rows[0].map(h => h.trim());
-  return rows.slice(1).map(cells =>
-    headers.reduce((rec, h, i) => { rec[h] = (cells[i] || '').trim(); return rec; }, {})
-  );
+  row.push(cur);
+  if(row.some(x=>x.trim()))rows.push(row);
+  if(!rows.length)return[];
+  const headers=rows[0].map(h=>h.trim());
+  return rows.slice(1).map(cells=>headers.reduce((o,h,i)=>{o[h]=(cells[i]||'').trim();return o},{}));
 }
 
-async function loadSheet(sheetName, fallbackRows = [], optional = false) {
+async function loadSheet(name, fallback=[], optional=false) {
   try {
-    const response = await fetch(csvUrl(sheetName), { cache: 'no-store' });
-    if (!response.ok) throw new Error(`${sheetName} responded ${response.status}`);
-    const text = await response.text();
-    const rows = parseCsv(text);
-    return rows.length || optional ? rows : fallbackRows;
-  } catch (error) {
-    console.warn(`Using fallback for ${sheetName}:`, error);
-    return fallbackRows;
+    const r = await fetch(csvUrl(name),{cache:'no-store'});
+    if(!r.ok) throw new Error(r.status);
+    const rows = parseCsv(await r.text());
+    return rows.length||optional ? rows : fallback;
+  } catch(e) {
+    console.warn(`Fallback for ${name}:`,e);
+    return fallback;
   }
 }
 
-async function loadSheetData() {
-  const [ranks, reqs, tracker, nodelayout] = await Promise.all([
-    loadSheet(SHEET_NAMES.ranks,        FALLBACK_SHEET_DATA.ranks),
-    loadSheet(SHEET_NAMES.requirements, FALLBACK_SHEET_DATA.reqs, true),
-    loadSheet(SHEET_NAMES.tracker,      FALLBACK_SHEET_DATA.tracker),
-    loadSheet(SHEET_NAMES.layout,       FALLBACK_SHEET_DATA.nodelayout)
+async function loadAll() {
+  const [ranks,reqs,influenceTasks,tracker,nodelayout] = await Promise.all([
+    loadSheet(SHEET_NAMES.ranks,         FALLBACK.ranks),
+    loadSheet(SHEET_NAMES.reqs,          FALLBACK.reqs, true),
+    loadSheet(SHEET_NAMES.influenceTasks,FALLBACK.influenceTasks, true),
+    loadSheet(SHEET_NAMES.tracker,       FALLBACK.tracker),
+    loadSheet(SHEET_NAMES.layout,        FALLBACK.nodelayout)
   ]);
-  return { ranks, reqs, tracker, nodelayout };
+  return {ranks,reqs,influenceTasks,tracker,nodelayout};
 }
 
-// ─── REQUIREMENT REGISTRY (from reqs sheet) ───
-function buildRequirementRegistry(reqRows) {
-  return new Map(
-    reqRows.map(row => {
-      const name = getField(row, 'name');
-      if (!name) return null;
-      return [normalizeKey(name), {
-        name,
-        // Support "type" column; fall back to "Points" as a hint
-        type: getField(row, 'type') || (getField(row, 'points') ? 'Task' : 'Requirement'),
-        description: getField(row, 'description', 'Description'),
-        points: getField(row, 'points', 'Points'),
-        notes: getField(row, 'notes', 'Notes')
-      }];
-    }).filter(Boolean)
-  );
+// ─── PARSE ───
+function buildReqRegistry(rows) {
+  return new Map(rows.map(row=>{
+    const name=getField(row,'name');
+    if(!name) return null;
+    return [normKey(name),{name, type:getField(row,'type')||'Requirement', description:getField(row,'description','Description')}];
+  }).filter(Boolean));
 }
 
-// ─── RANK PARSING ───
-// FIX: Also reads "Influence points" column as a synthetic requirement
-function parseRank(row, index, registry) {
-  const name = getField(row, 'name', 'rank name', 'rank');
-  const requirements = [];
-
-  // Collect req1…reqN columns
-  Object.keys(row).forEach(key => {
-    const match = normalizeKey(key).match(/^req\s*(\d+)$/);
-    if (!match) return;
-    const reqName = row[key].trim();
-    if (!reqName) return;
-    const num = match[1];
-    const reg = registry.get(normalizeKey(reqName));
-    requirements.push({
-      name: reqName,
-      description: getField(row, `req${num} description`, `req ${num} description`) || reg?.description || '',
-      type: reg?.type || '',
-      points: reg?.points || '',
-      _order: parseInt(num, 10)
-    });
+function parseRank(row, index) {
+  const name = getField(row,'name','rank name','rank');
+  const reqs = [];
+  Object.keys(row).forEach(key=>{
+    const m = normKey(key).match(/^req\s*(\d+)$/);
+    if(!m) return;
+    const rName = row[key].trim();
+    if(!rName) return;
+    const reg = S.reqRegistry.get(normKey(rName));
+    reqs.push({ name:rName, description:getField(row,`req${m[1]} description`,`req ${m[1]} description`)||reg?.description||'', type:reg?.type||'', isInfluence:false, _order:parseInt(m[1],10) });
   });
-
-  // FIX: "Influence points" column becomes a synthetic requirement
-  const influenceVal = getField(row, 'influence points', 'influence');
-  const influenceNum = parseInt(influenceVal, 10);
-  if (influenceNum > 0) {
-    const reqName = `${influenceNum} Influence Points`;
-    const reg = registry.get(normalizeKey(reqName));
-    requirements.push({
-      name: reqName,
-      description: reg?.description || `Earn at least ${influenceNum} influence points.`,
-      type: reg?.type || 'Influence',
-      points: '',
-      _order: 999
-    });
-  }
-
-  requirements.sort((a, b) => a._order - b._order);
-
-  return {
-    id: slugify(name || `rank-${index + 1}`),
-    order: index,
-    name,
-    description: getField(row, 'description', 'rank description', 'details') || '',
-    lore:        getField(row, 'lore', 'flavor', 'additional lore') || '',
-    rewards:     splitList(getField(row, 'rewards', 'reward')),
-    requirements
-  };
-}
-
-// ─── LAYOUT & CONNECTIONS PARSING ───
-// FIX: Extract conn1/conn2/conn3 from nodelayout rows to build connections
-function parseCoordinate(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? Math.min(95, Math.max(5, n)) : 50;
+  const ipVal = parseInt(getField(row,'influence points','influence'),10);
+  if(ipVal>0) reqs.push({ name:`${ipVal} Influence Points`, description:`Earn at least ${ipVal} influence points.`, type:'Influence', isInfluence:true, threshold:ipVal, _order:999 });
+  reqs.sort((a,b)=>a._order-b._order);
+  return { id:slugify(name||`rank-${index+1}`), order:index, name, description:getField(row,'description','rank description')||'', lore:getField(row,'lore','flavor')||'', rewards:splitList(getField(row,'rewards','reward')), requirements:reqs };
 }
 
 function parseLayoutAndConnections(rows) {
-  const layout = new Map();
-  const connections = [];
-
-  rows.forEach(row => {
-    const name = getField(row, 'name', 'rank');
-    if (!name) return;
-    const id = slugify(name);
-    layout.set(id, {
-      x:    parseCoordinate(getField(row, 'x')),
-      y:    parseCoordinate(getField(row, 'y')),
-      icon: getField(row, 'icon') || `${id}.png`
-    });
-
-    // Read conn1, conn2, conn3 … connN
-    Object.keys(row).forEach(key => {
-      if (!/^conn\d+$/i.test(normalizeKey(key))) return;
-      const target = row[key].trim();
-      if (target) connections.push({ from: id, to: slugify(target) });
+  const layout=new Map(), connections=[];
+  rows.forEach(row=>{
+    const name=getField(row,'name','rank');
+    if(!name) return;
+    const id=slugify(name);
+    layout.set(id,{ x:parseCoord(getField(row,'x')), y:parseCoord(getField(row,'y')), icon:getField(row,'icon')||`${id}.png` });
+    Object.keys(row).forEach(key=>{
+      if(!/^conn\d+$/i.test(normKey(key))) return;
+      const target=row[key].trim();
+      if(target) connections.push({from:id, to:slugify(target)});
     });
   });
-
-  return { layout, connections };
+  return {layout,connections};
 }
 
-// ─── PLAYER HELPERS ───
-function getPlayerName(player) {
-  return getField(player, 'Player Name', 'player', 'name') || 'Unknown Player';
+function parseCoord(v){ const n=Number(v); return Number.isFinite(n)?Math.min(93,Math.max(7,n)):50; }
+
+function applyData(data) {
+  S.reqRegistry   = buildReqRegistry(data.reqs);
+  S.influenceTasks= data.influenceTasks;
+  S.ranks         = data.ranks.map((r,i)=>parseRank(r,i)).filter(r=>r.name);
+  S.players       = data.tracker;
+  const {layout,connections} = parseLayoutAndConnections(data.nodelayout);
+  S.layout        = layout;
+  S.connections   = connections.length ? connections : S.ranks.slice(1).map((r,i)=>({from:S.ranks[i].id,to:r.id}));
 }
-function getInfluence(player) {
-  return getField(player, 'Influence Points', 'influence') || '0';
+
+// ─── PLAYER LOGIC ───
+const getPlayerName = p => getField(p,'Player Name','player','name')||'Unknown';
+const getInfluence  = p => parseInt(getField(p,'Influence Points','influence')||'0',10);
+
+function reqDone(player, req) {
+  if(req.isInfluence) return getInfluence(player) >= req.threshold;
+  return isTruthy(getField(player, req.name));
 }
-function requirementDone(player, reqName) {
-  // For influence-point requirements, compare numerically
-  const ipMatch = reqName.match(/^(\d+)\s+influence\s+points?$/i);
-  if (ipMatch) {
-    return parseInt(getInfluence(player), 10) >= parseInt(ipMatch[1], 10);
-  }
-  return isTruthy(getField(player, reqName));
+
+function rankCompleted(rank, player) {
+  return rank.requirements.length>0 && rank.requirements.every(r=>reqDone(player,r));
 }
-function rankIsCompleted(rank, player) {
-  return rank.requirements.length > 0 && rank.requirements.every(r => requirementDone(player, r.name));
+
+function rankStatus(rank, player, completedIds) {
+  if(rankCompleted(rank,player)) return 'completed';
+  const incoming = S.connections.filter(c=>c.to===rank.id);
+  const prereqOk = incoming.length===0 || incoming.every(c=>completedIds.has(c.from));
+  return prereqOk ? 'available' : 'locked';
 }
-function getRankStatus(rank, player, completedIds) {
-  if (rankIsCompleted(rank, player)) return 'completed';
-  const incoming = appState.connections.filter(c => c.to === rank.id);
-  const prereqsOk = incoming.length === 0 || incoming.every(c => completedIds.has(c.from));
-  return prereqsOk ? 'available' : 'locked';
-}
-function getPlayerProgress(player) {
-  const allReqNames = [...new Set(appState.ranks.flatMap(r => r.requirements.map(q => q.name)))];
-  const completedReqs  = allReqNames.filter(n => requirementDone(player, n)).length;
-  const completedIds   = new Set(appState.ranks.filter(r => rankIsCompleted(r, player)).map(r => r.id));
-  const ranked = appState.ranks.map(r => ({ ...r, status: getRankStatus(r, player, completedIds) }));
-  const completedRanks = ranked.filter(r => r.status === 'completed');
-  const currentRank    = completedRanks[completedRanks.length - 1]?.name
-                         || getField(player, 'Ranking', 'rank', 'current rank')
-                         || 'Unranked';
-  const nextRank        = ranked.find(r => r.status === 'available') || ranked.find(r => r.status !== 'completed');
-  const highestRemaining = [...ranked].reverse().find(r => r.status !== 'completed');
+
+function getProgress(player) {
+  const allReqs    = [...new Set(S.ranks.flatMap(r=>r.requirements.map(q=>q.name)))];
+  const completedIds = new Set(S.ranks.filter(r=>rankCompleted(r,player)).map(r=>r.id));
+  const ranked     = S.ranks.map(r=>({...r, status:rankStatus(r,player,completedIds)}));
+  const doneRanks  = ranked.filter(r=>r.status==='completed');
+  const doneReqs   = allReqs.filter(n=>{ const req=S.ranks.flatMap(r=>r.requirements).find(r=>r.name===n); return req?reqDone(player,req):false; }).length;
   return {
-    ranks: ranked,
-    completedRequirements: completedReqs,
-    totalRequirements: allReqNames.length,
-    percent: allReqNames.length ? Math.round(completedReqs / allReqNames.length * 100) : 0,
-    currentRank, nextRank, highestRemaining, completedIds
+    ranks:ranked,
+    completedRequirements:doneReqs,
+    totalRequirements:allReqs.length,
+    percent:allReqs.length?Math.round(doneReqs/allReqs.length*100):0,
+    currentRank:doneRanks[doneRanks.length-1]?.name||getField(player,'Ranking','rank')||'Unranked',
+    nextRank:ranked.find(r=>r.status==='available')||ranked.find(r=>r.status!=='completed'),
+    highestRemaining:[...ranked].reverse().find(r=>r.status!=='completed'),
+    completedIds
   };
 }
 
-// ─── ICON HELPERS ───
+// ─── ICON ───
 function getIconSrc(rank) {
-  const layout = appState.layout.get(rank.id);
-  const icon = cleanIconFilename(layout?.icon || `${rank.id}.png`);
-  return `${RANK_ICON_PATH}${icon}`;
+  const l=S.layout.get(rank.id);
+  return `${RANK_ICON_PATH}${cleanIcon(l?.icon||`${rank.id}.png`)}`;
 }
-function iconImage(rank, className = 'rank-icon-img') {
-  return `<img class="${escapeHtml(className)}" src="${escapeHtml(getIconSrc(rank))}" alt="" loading="lazy"
-    onerror="this.onerror=null;this.src='${DEFAULT_RANK_ICON}'">`;
+function iconImg(rank, cls='rank-icon-img') {
+  return `<img class="${esc(cls)}" src="${esc(getIconSrc(rank))}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_RANK_ICON}'">`;
 }
 
-// ─── RENDER: PLAYER SELECTOR ───
-function renderPlayerSelector() {
-  const sel = document.getElementById('playerSelect');
-  sel.innerHTML = appState.players.map((p, i) =>
-    `<option value="${i}">${escapeHtml(getPlayerName(p))}</option>`
-  ).join('');
-  sel.value = String(appState.players.indexOf(appState.selectedPlayer));
+// ─── RENDER SIDEBAR ───
+function renderSidebar(prog) {
+  const p=S.selectedPlayer;
+  const curRankObj=prog.ranks.find(r=>r.name===prog.currentRank)||prog.ranks.find(r=>r.status==='completed')||prog.ranks[0];
+  const rem=prog.nextRank?.requirements.filter(r=>!reqDone(p,r)).length||0;
+  document.getElementById('sidebarPlayerName').textContent=getPlayerName(p);
+  document.getElementById('sidebarCurrentRank').textContent=prog.currentRank;
+  document.getElementById('sidebarInfluence').textContent=getInfluence(p);
+  document.getElementById('currentRankIcon').innerHTML=curRankObj?iconImg(curRankObj,'sidebar-rank-icon-img'):'✦';
+  document.getElementById('progressPercent').textContent=`${prog.percent}%`;
+  document.getElementById('progressCounts').textContent=`${prog.completedRequirements} / ${prog.totalRequirements} done`;
+  document.getElementById('ringFill').style.strokeDashoffset=String(264-(264*prog.percent/100));
+  document.getElementById('nextRankName').textContent=prog.nextRank?.name||'All complete';
+  document.getElementById('nextRankDesc').textContent=prog.nextRank?`${rem} requirements remaining`:'The circle is complete';
+  document.getElementById('finalGoalName').textContent=prog.highestRemaining?.name||'Legacy Secured';
+  document.getElementById('finalGoalDesc').textContent=prog.highestRemaining?'Highest rank remaining':'No ranks remaining';
 }
 
-// ─── RENDER: SIDEBAR ───
-function renderSidebar(progress) {
-  const player = appState.selectedPlayer;
-  const currentRankObj = progress.ranks.find(r => r.name === progress.currentRank)
-                      || progress.ranks.find(r => r.status === 'completed')
-                      || progress.ranks[0];
-  const remaining = progress.nextRank?.requirements.filter(r => !requirementDone(player, r.name)).length || 0;
-
-  document.getElementById('sidebarPlayerName').textContent = getPlayerName(player);
-  document.getElementById('sidebarCurrentRank').textContent = progress.currentRank;
-  document.getElementById('sidebarInfluence').textContent = getInfluence(player);
-  document.getElementById('currentRankIcon').innerHTML = currentRankObj ? iconImage(currentRankObj, 'sidebar-rank-icon-img') : '✦';
-  document.getElementById('progressPercent').textContent = `${progress.percent}%`;
-  document.getElementById('progressCounts').textContent = `${progress.completedRequirements} / ${progress.totalRequirements} done`;
-  document.getElementById('ringFill').style.strokeDashoffset = String(264 - (264 * progress.percent / 100));
-  document.getElementById('nextRankName').textContent = progress.nextRank?.name || 'All ranks complete';
-  document.getElementById('nextRankDesc').textContent = progress.nextRank ? `${remaining} requirements remaining` : 'The circle is complete';
-  document.getElementById('finalGoalName').textContent = progress.highestRemaining?.name || 'Legacy Secured';
-  document.getElementById('finalGoalDesc').textContent = progress.highestRemaining ? 'Highest rank remaining' : 'No ranks remaining';
+// ─── RENDER PLAYER SELECTOR ───
+function renderSelector() {
+  const sel=document.getElementById('playerSelect');
+  sel.innerHTML=S.players.map((p,i)=>`<option value="${i}">${esc(getPlayerName(p))}</option>`).join('');
+  sel.value=String(S.players.indexOf(S.selectedPlayer));
 }
 
-// ─── RENDER: NODE MAP ───
-function statusLabel(status) {
-  if (status === 'completed') return 'Completed';
-  if (status === 'available') return 'Available';
-  return 'Locked';
-}
-function requirementRow(req, player) {
-  const done = requirementDone(player, req.name);
-  return `<div class="check-item ${done ? 'done' : ''}">
-    <span class="check-icon ${done ? 'c' : 'x'}">${done ? '✓' : '○'}</span>
-    ${escapeHtml(req.name)}
-  </div>`;
-}
+// ─── RENDER NODES ───
+const statusLabel = s => s==='completed'?'Completed':s==='available'?'Available':'Locked';
 
-function renderNodes(progress) {
-  const canvas = document.getElementById('mapCanvas');
-  canvas.querySelectorAll('.node').forEach(n => n.remove());
-  progress.ranks.forEach(rank => {
-    const layout = appState.layout.get(rank.id) || { x: 50, y: 50 };
-    const node = document.createElement('button');
-    node.type = 'button';
-    node.className = `node node-${rank.status}${rank.status === 'available' ? ' pulse' : ''}`;
-    node.id = `node-${rank.id}`;
-    node.style.left = `${layout.x}%`;
-    node.style.top  = `${layout.y}%`;
-    node.dataset.rankId = rank.id;
-    node.innerHTML = `
+function renderNodes(prog) {
+  const canvas=document.getElementById('mapCanvas');
+  // Remove old nodes only
+  canvas.querySelectorAll('.node').forEach(n=>n.remove());
+
+  prog.ranks.forEach(rank=>{
+    const layout=S.layout.get(rank.id)||{x:50,y:50};
+    const node=document.createElement('button');
+    node.type='button';
+    node.className=`node node-${rank.status}${rank.status==='available'?' pulse':''}`;
+    node.id=`node-${rank.id}`;
+    node.style.cssText=`left:${layout.x}%;top:${layout.y}%`;
+    node.dataset.rankId=rank.id;
+    node.innerHTML=`
       <div class="node-header">
-        <div class="node-icon-wrap">${iconImage(rank)}</div>
+        <div class="node-icon-wrap">${iconImg(rank)}</div>
         <div class="node-title-group">
-          <div class="node-title">${escapeHtml(rank.name)}</div>
+          <div class="node-title">${esc(rank.name)}</div>
           <div class="node-status s-${rank.status}"><span class="status-dot"></span>${statusLabel(rank.status)}</div>
         </div>
       </div>
       <div class="node-body">
-        <div class="node-checklist">${rank.requirements.map(r => requirementRow(r, appState.selectedPlayer)).join('')}</div>
+        <div class="node-checklist">${rank.requirements.map(r=>{
+          const done=reqDone(S.selectedPlayer,r);
+          return `<div class="check-item${done?' done':''}"><span class="check-icon ${done?'c':'x'}">${done?'✓':'○'}</span>${esc(r.name)}</div>`;
+        }).join('')}</div>
       </div>`;
-    node.addEventListener('click', () => {
+    node.addEventListener('click',()=>{
       selectNode(rank.id);
-      // On mobile, open the detail drawer
-      if (window.innerWidth < 900) openDetailDrawer();
+      if(window.innerWidth<900) openDrawer();
     });
     canvas.appendChild(node);
   });
 }
 
-// ─── RENDER: PATHS ───
-function drawPaths(progress = getPlayerProgress(appState.selectedPlayer)) {
-  const canvas = document.getElementById('mapCanvas');
-  const svg    = document.getElementById('pathSvg');
-  const rect   = canvas.getBoundingClientRect();
+// ─── DRAW PATHS ───
+function drawPaths(prog=getProgress(S.selectedPlayer)) {
+  const canvas=document.getElementById('mapCanvas');
+  const svg=document.getElementById('pathSvg');
+  const rect=canvas.getBoundingClientRect();
+  if(!rect.width) return; // canvas not visible yet
 
-  function center(id) {
-    const el = document.getElementById(`node-${id}`);
-    if (!el) return { x: 0, y: 0 };
-    const r = el.getBoundingClientRect();
-    return { x: r.left - rect.left + r.width / 2, y: r.top - rect.top + r.height / 2 };
+  function center(id){
+    const el=document.getElementById(`node-${id}`);
+    if(!el) return null;
+    const r=el.getBoundingClientRect();
+    return {x:r.left-rect.left+r.width/2, y:r.top-rect.top+r.height/2};
   }
 
-  function pathStatus(conn) {
-    const from = progress.ranks.find(r => r.id === conn.from);
-    const to   = progress.ranks.find(r => r.id === conn.to);
-    if (from?.status === 'completed' && to?.status === 'completed') return 'completed';
-    if (from?.status === 'completed' && to?.status === 'available') return 'available';
+  function pStatus(conn){
+    const f=prog.ranks.find(r=>r.id===conn.from), t=prog.ranks.find(r=>r.id===conn.to);
+    if(f?.status==='completed'&&t?.status==='completed') return 'completed';
+    if(f?.status==='completed'&&t?.status==='available')  return 'available';
     return 'locked';
   }
 
-  const colors = { completed: '#60d090', available: '#9b6dff', locked: '#4a3a60' };
-  svg.innerHTML = appState.connections.map(conn => {
-    const a = center(conn.from), b = center(conn.to);
-    const cpx = a.x + (b.x - a.x) * 0.5;
-    const st  = pathStatus(conn);
-    return `<path d="M${a.x},${a.y} C${cpx},${a.y} ${cpx},${b.y} ${b.x},${b.y}"
-      fill="none" stroke="${colors[st]}" stroke-width="2.5" class="path-${st}" stroke-linecap="round"/>`;
+  const colors={completed:'#60d090',available:'#9b6dff',locked:'#4a3a60'};
+  svg.innerHTML=S.connections.map(conn=>{
+    const a=center(conn.from), b=center(conn.to);
+    if(!a||!b) return '';
+    const cpx=a.x+(b.x-a.x)*0.5, st=pStatus(conn);
+    return `<path d="M${a.x},${a.y} C${cpx},${a.y} ${cpx},${b.y} ${b.x},${b.y}" fill="none" stroke="${colors[st]}" stroke-width="2.5" class="path-${st}" stroke-linecap="round"/>`;
   }).join('');
 }
 
-// ─── RENDER: RIGHT PANEL ───
-function renderDetailRequirement(req, player, index) {
-  const done     = requirementDone(player, req.name);
-  const selected = appState.selectedRequirementName === req.name;
-  return `<button type="button" class="req-row req-button ${done ? 'done' : 'pending'}${selected ? ' selected' : ''}" data-req-index="${index}">
-    <div class="req-circle">${done ? '✓' : '○'}</div>
-    <div class="req-name">${escapeHtml(req.name)}</div>
+// ─── SELECT NODE → RIGHT PANEL ───
+function renderReqRow(req, player, index) {
+  const done=reqDone(player,req);
+  const sel=S.selectedReqName===req.name;
+  const extra=req.isInfluence?` data-influence="1" data-threshold="${req.threshold}"`:'';
+  return `<button type="button" class="req-row req-button ${done?'done':'pending'}${sel?' selected':''}" data-req-index="${index}"${extra}>
+    <div class="req-circle">${done?'✓':'○'}</div>
+    <div class="req-name">${esc(req.name)}${req.isInfluence?` <span class="ip-badge">🔮 ${getInfluence(player)} / ${req.threshold}</span>`:''}</div>
   </button>`;
 }
 
-function renderRequirementDetails(req) {
-  const nameEl = document.getElementById('requirementDetailName');
-  const typeEl = document.getElementById('requirementDetailType');
-  const descEl = document.getElementById('requirementDetailDescription');
-  if (!req) {
-    nameEl.textContent = 'Select a requirement to view details.';
-    typeEl.textContent = '';
-    descEl.textContent = '';
-    return;
-  }
-  const reg = appState.reqRegistry.get(normalizeKey(req.name));
-  nameEl.textContent = req.name;
-  typeEl.textContent = reg?.type || req.type ? `Type: ${reg?.type || req.type}` : '';
-  // Build rich description — include points if available
-  const desc = reg?.description || req.description || 'No description provided.';
-  const pts  = reg?.points || req.points;
-  descEl.textContent = pts ? `${desc} (${pts} pts)` : desc;
-}
-
-function selectRequirement(rank, index) {
-  const req = rank.requirements[index];
-  if (!req) return;
-  appState.selectedRequirementName = req.name;
-  document.querySelectorAll('.req-button').forEach(btn =>
-    btn.classList.toggle('selected', Number(btn.dataset.reqIndex) === index)
-  );
-  renderRequirementDetails(req);
-}
-
-function renderReward(reward, index) {
-  return `<div class="reward-tile">
-    <div class="reward-tile-icon">${rewardIcons[index % rewardIcons.length]}</div>
-    <div class="reward-tile-name">${escapeHtml(reward)}</div>
-  </div>`;
-}
-
 function selectNode(id) {
-  const progress = getPlayerProgress(appState.selectedPlayer);
-  const rank = progress.ranks.find(r => r.id === id) || progress.nextRank || progress.ranks[0];
-  if (!rank) return;
+  const prog=getProgress(S.selectedPlayer);
+  const rank=prog.ranks.find(r=>r.id===id)||prog.nextRank||prog.ranks[0];
+  if(!rank) return;
+  if(S.selectedRankId!==rank.id) S.selectedReqName=null;
+  S.selectedRankId=rank.id;
 
-  if (appState.selectedRankId !== rank.id) appState.selectedRequirementName = null;
-  appState.selectedRankId = rank.id;
+  document.getElementById('detailIcon').innerHTML=iconImg(rank,'detail-rank-icon-img');
+  document.getElementById('detailTitle').textContent=rank.name.toUpperCase();
+  document.getElementById('detailSub').textContent=statusLabel(rank.status);
+  document.getElementById('detailLore').textContent=rank.description||rank.lore||'No description.';
+  document.getElementById('detailReqs').innerHTML=rank.requirements.map((r,i)=>renderReqRow(r,S.selectedPlayer,i)).join('')||'<div class="req-row pending">No requirements.</div>';
+  document.getElementById('detailRewards').innerHTML=rank.rewards.map((r,i)=>`<div class="reward-tile"><div class="reward-tile-icon">${REWARD_ICONS[i%REWARD_ICONS.length]}</div><div class="reward-tile-name">${esc(r)}</div></div>`).join('')||'<div class="reward-tile"><div class="reward-tile-icon">✦</div><div class="reward-tile-name">None</div></div>';
 
-  document.getElementById('detailIcon').innerHTML   = iconImage(rank, 'detail-rank-icon-img');
-  document.getElementById('detailTitle').textContent = rank.name.toUpperCase();
-  document.getElementById('detailSub').textContent   = statusLabel(rank.status);
-  // Show description first; fall back to lore
-  document.getElementById('detailLore').textContent  = rank.description || rank.lore || 'No description provided.';
+  document.querySelectorAll('.node').forEach(n=>n.classList.toggle('selected',n.dataset.rankId===rank.id));
 
-  document.getElementById('detailReqs').innerHTML =
-    rank.requirements.map((r, i) => renderDetailRequirement(r, appState.selectedPlayer, i)).join('')
-    || '<div class="req-row pending">No requirements listed.</div>';
+  // Req row click handlers
+  document.querySelectorAll('.req-button').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const idx=Number(btn.dataset.reqIndex);
+      const req=rank.requirements[idx];
+      if(!req) return;
+      if(req.isInfluence) { openInfluenceModal(); return; }
+      S.selectedReqName=req.name;
+      document.querySelectorAll('.req-button').forEach(b=>b.classList.toggle('selected',Number(b.dataset.reqIndex)===idx));
+      renderReqDetail(req);
+    });
+  });
 
-  document.getElementById('detailRewards').innerHTML =
-    rank.rewards.map(renderReward).join('')
-    || '<div class="reward-tile"><div class="reward-tile-icon">✦</div><div class="reward-tile-name">No rewards</div></div>';
+  renderReqDetail(rank.requirements.find(r=>r.name===S.selectedReqName)||null);
+}
 
-  document.querySelectorAll('.node').forEach(n =>
-    n.classList.toggle('selected', n.dataset.rankId === rank.id)
-  );
-  document.querySelectorAll('.req-button').forEach(btn =>
-    btn.addEventListener('click', () => selectRequirement(rank, Number(btn.dataset.reqIndex)))
-  );
+function renderReqDetail(req) {
+  const nameEl=document.getElementById('requirementDetailName');
+  const typeEl=document.getElementById('requirementDetailType');
+  const descEl=document.getElementById('requirementDetailDescription');
+  if(!req){ nameEl.textContent='Select a requirement to view details.'; typeEl.textContent=''; descEl.textContent=''; return; }
+  nameEl.textContent=req.name;
+  typeEl.textContent=req.type?`Type: ${req.type}`:'';
+  descEl.textContent=req.description||'No description provided.';
+}
 
-  const selReq = rank.requirements.find(r => r.name === appState.selectedRequirementName);
-  renderRequirementDetails(selReq || null);
+// ─── INFLUENCE MODAL ───
+function openInfluenceModal() {
+  const player=S.selectedPlayer;
+  const influence=getInfluence(player);
+  const tasks=S.influenceTasks;
+
+  const rows=tasks.map(t=>{
+    const name=getField(t,'name');
+    const desc=getField(t,'description','Description');
+    const pts =getField(t,'points','Points');
+    const notes=getField(t,'notes','Notes');
+    const done=isTruthy(getField(player,name));
+    return `<div class="ip-row${done?' ip-done':''}">
+      <div class="ip-check">${done?'✓':'○'}</div>
+      <div class="ip-info">
+        <div class="ip-name">${esc(name)}</div>
+        ${desc?`<div class="ip-desc">${esc(desc)}</div>`:''}
+        ${notes?`<div class="ip-notes">${esc(notes)}</div>`:''}
+      </div>
+      <div class="ip-pts">${pts?`+${pts}`:''}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('ipModalInfluence').textContent=`${influence} pts earned`;
+  document.getElementById('ipTaskList').innerHTML=rows||'<div style="color:var(--text3);padding:12px;font-style:italic;">No tasks found.</div>';
+  document.getElementById('ipModal').classList.add('open');
+}
+
+function closeInfluenceModal() {
+  document.getElementById('ipModal').classList.remove('open');
 }
 
 // ─── MOBILE DRAWER ───
-function openDetailDrawer() {
+function openDrawer() {
   document.getElementById('rightPanel').classList.add('drawer-open');
   document.getElementById('drawerBackdrop').classList.add('visible');
 }
-function closeDetailDrawer() {
+function closeDrawer() {
   document.getElementById('rightPanel').classList.remove('drawer-open');
   document.getElementById('drawerBackdrop').classList.remove('visible');
 }
 
-// ─── MOBILE BOTTOM NAV ───
+// ─── BOTTOM NAV ───
 function initBottomNav() {
-  document.querySelectorAll('.bnav-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const view = btn.dataset.view;
-      document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
+  let leftVisible=false;
+  document.querySelectorAll('.bnav-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const view=btn.dataset.view;
+      document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
-      // Toggle panels on mobile
-      const leftPanel  = document.getElementById('leftPanel');
-      const mapCanvas  = document.getElementById('mapCanvas');
-      if (view === 'map') {
-        leftPanel.style.display = 'none';
-        mapCanvas.style.display = '';
-        closeDetailDrawer();
-      } else if (view === 'player') {
-        leftPanel.style.display = '';
-        mapCanvas.style.display = 'none';
-        closeDetailDrawer();
-      } else if (view === 'detail') {
-        openDetailDrawer();
+      const lp=document.getElementById('leftPanel');
+      if(view==='map'){
+        lp.classList.remove('mobile-visible');
+        closeDrawer();
+        leftVisible=false;
+      } else if(view==='player'){
+        lp.classList.add('mobile-visible');
+        closeDrawer();
+        leftVisible=true;
+      } else if(view==='detail'){
+        lp.classList.remove('mobile-visible');
+        openDrawer();
+        leftVisible=false;
       }
     });
   });
 }
 
-// ─── MAIN RENDER ───
+// ─── FULL RENDER ───
 function renderApp() {
-  if (!appState.selectedPlayer) return;
-  const progress = getPlayerProgress(appState.selectedPlayer);
-  renderPlayerSelector();
-  renderSidebar(progress);
-  renderNodes(progress);
-  requestAnimationFrame(() => {
-    drawPaths(progress);
-    selectNode(appState.selectedRankId || progress.nextRank?.id || progress.ranks[0]?.id);
+  if(!S.selectedPlayer) return;
+  const prog=getProgress(S.selectedPlayer);
+  renderSelector();
+  renderSidebar(prog);
+  renderNodes(prog);
+  requestAnimationFrame(()=>{
+    drawPaths(prog);
+    selectNode(S.selectedRankId||prog.nextRank?.id||prog.ranks[0]?.id);
   });
 }
 
-async function refreshFromSheets() {
-  const currentName   = getPlayerName(appState.selectedPlayer);
-  const currentRankId = appState.selectedRankId;
-  const data = await loadSheetData();
-  applySheetData(data);
-  appState.selectedPlayer  = appState.players.find(p => getPlayerName(p) === currentName) || appState.players[0];
-  appState.selectedRankId  = appState.ranks.some(r => r.id === currentRankId) ? currentRankId : null;
+async function refresh() {
+  const name=getPlayerName(S.selectedPlayer), rid=S.selectedRankId;
+  applyData(await loadAll());
+  S.selectedPlayer=S.players.find(p=>getPlayerName(p)===name)||S.players[0];
+  S.selectedRankId=S.ranks.some(r=>r.id===rid)?rid:null;
   renderApp();
 }
 
-function applySheetData(data) {
-  appState.reqRegistry = buildRequirementRegistry(data.reqs);
-  appState.ranks       = data.ranks.map((row, i) => parseRank(row, i, appState.reqRegistry)).filter(r => r.name);
-  appState.players     = data.tracker;
-  const { layout, connections } = parseLayoutAndConnections(data.nodelayout);
-  appState.layout      = layout;
-  // Fall back to linear chain if no connections found in sheet
-  appState.connections = connections.length ? connections : data.ranks.slice(1).map((row, i) => ({
-    from: slugify(getField(data.ranks[i], 'name')),
-    to:   slugify(getField(row, 'name'))
-  }));
-}
-
+// ─── INIT ───
 async function init() {
-  const data = await loadSheetData();
-  applySheetData(data);
-  appState.selectedPlayer = appState.players[0];
+  applyData(await loadAll());
+  S.selectedPlayer=S.players[0];
 
-  document.getElementById('playerSelect').addEventListener('change', e => {
-    appState.selectedPlayer = appState.players[Number(e.target.value)];
-    appState.selectedRankId = null;
-    appState.selectedRequirementName = null;
+  document.getElementById('playerSelect').addEventListener('change',e=>{
+    S.selectedPlayer=S.players[Number(e.target.value)];
+    S.selectedRankId=null; S.selectedReqName=null;
     renderApp();
   });
 
-  document.getElementById('drawerBackdrop')?.addEventListener('click', closeDetailDrawer);
-  document.getElementById('drawerClose')?.addEventListener('click', closeDetailDrawer);
+  document.getElementById('drawerBackdrop').addEventListener('click',closeDrawer);
+  document.getElementById('drawerClose').addEventListener('click',closeDrawer);
+  document.getElementById('ipModalClose').addEventListener('click',closeInfluenceModal);
+  document.getElementById('ipModal').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeInfluenceModal(); });
 
   initBottomNav();
   renderApp();
-  setInterval(refreshFromSheets, 60000);
+  setInterval(refresh,60000);
 }
 
-let resizeFrame;
-window.addEventListener('resize', () => {
-  cancelAnimationFrame(resizeFrame);
-  resizeFrame = requestAnimationFrame(() => drawPaths());
-});
-window.addEventListener('load', init);
+let rafResize;
+window.addEventListener('resize',()=>{ cancelAnimationFrame(rafResize); rafResize=requestAnimationFrame(()=>drawPaths()); });
+window.addEventListener('load',init);
