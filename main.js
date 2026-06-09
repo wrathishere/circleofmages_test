@@ -50,49 +50,6 @@ const isTruthy = v => ['true','yes','y','1','complete','completed','done'].inclu
 const splitList= v => String(v||'').split(/[;|\n]+/).map(s=>s.trim()).filter(Boolean);
 const cleanIcon= v => String(v||'').split('/').pop().replace(/[^a-zA-Z0-9._-]/g,'')||'default.png';
 
-// Standard formatting function with bullet, bold, italic, and newline parsing support
-function parseFormatting(text) {
-  if (!text) return '';
-  const lines = esc(text).split(/\r?\n/);
-  let html = '';
-  let inList = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const listMatch = line.match(/^\s*([-*+•])\s+(.*)$/);
-
-    if (listMatch) {
-      if (!inList) {
-        html += '<ul>';
-        inList = true;
-      }
-      html += `<li>${listMatch[2]}</li>`;
-    } else {
-      if (inList) {
-        html += '</ul>';
-        inList = false;
-      }
-      html += line;
-      
-      if (i < lines.length - 1) {
-        const nextLine = lines[i + 1];
-        const nextIsList = nextLine ? nextLine.match(/^\s*([-*+•])\s+/) : false;
-        if (!nextIsList) {
-          html += '<br>';
-        }
-      }
-    }
-  }
-  
-  if (inList) {
-    html += '</ul>';
-  }
-
-  return html
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>');
-}
-
 // getField: case-insensitive, strips non-ASCII from keys before comparing
 function getField(row, ...names) {
   if (!row) return '';
@@ -434,7 +391,7 @@ function selectNode(id) {
   document.getElementById('detailIcon').innerHTML    = iconImg(rank, 'detail-rank-icon-img');
   document.getElementById('detailTitle').textContent = rank.name.toUpperCase();
   document.getElementById('detailSub').textContent   = statusLabel(rank.status);
-  document.getElementById('detailLore').innerHTML  = parseFormatting(rank.description || rank.lore || 'No description.');
+  document.getElementById('detailLore').textContent  = rank.description || rank.lore || 'No description.';
   document.getElementById('detailReqs').innerHTML    = rank.requirements.map((r, i) => renderReqRow(r, S.selectedPlayer, i)).join('') || '<div class="req-row pending">No requirements.</div>';
   document.getElementById('detailRewards').innerHTML = rank.rewards.map((r, i) =>
     `<div class="reward-tile"><div class="reward-tile-icon">${REWARD_ICONS[i % REWARD_ICONS.length]}</div><div class="reward-tile-name">${esc(r)}</div></div>`
@@ -460,7 +417,7 @@ function selectNode(id) {
 function renderReqDetail(req) {
   document.getElementById('requirementDetailName').textContent = req ? req.name : 'Select a requirement to view details.';
   document.getElementById('requirementDetailType').textContent = req?.type ? `Type: ${req.type}` : '';
-  document.getElementById('requirementDetailDescription').innerHTML = parseFormatting(req?.description || (req ? 'No description.' : ''));
+  document.getElementById('requirementDetailDescription').textContent = req?.description || (req ? 'No description.' : '');
 }
 
 // ─── INFLUENCE MODAL ───
@@ -478,8 +435,8 @@ function openInfluenceModal() {
       <div class="ip-check">${done ? '✓' : '○'}</div>
       <div class="ip-info">
         <div class="ip-name">${esc(name)}</div>
-        ${desc  ? `<div class="ip-desc">${parseFormatting(desc)}</div>` : ''}
-        ${notes ? `<div class="ip-notes">${parseFormatting(notes)}</div>` : ''}
+        ${desc  ? `<div class="ip-desc">${esc(desc)}</div>` : ''}
+        ${notes ? `<div class="ip-notes">${esc(notes)}</div>` : ''}
       </div>
       <div class="ip-pts">${pts ? `+${pts}` : ''}</div>
     </div>`;
@@ -556,4 +513,3 @@ async function init() {
 let rafResize;
 window.addEventListener('resize', () => { cancelAnimationFrame(rafResize); rafResize = requestAnimationFrame(() => drawPaths()); });
 document.addEventListener('DOMContentLoaded', init);
---- END OF FILE main.js ---
