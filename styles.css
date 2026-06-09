@@ -14,7 +14,18 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font-body);overflow:hidden}
-
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url('images/background.png'); 
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.12; 
+  z-index: -1; 
+  pointer-events: none; 
+}
 /* ── APP SHELL ── */
 .app{display:flex;flex-direction:column;height:100dvh}
 
