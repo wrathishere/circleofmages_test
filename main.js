@@ -462,3 +462,22 @@ async function init() {
 let rafResize;
 window.addEventListener('resize',()=>{ cancelAnimationFrame(rafResize); rafResize=requestAnimationFrame(()=>drawPaths()); });
 window.addEventListener('DOMContentLoaded', init);
+
+// ─── DIAGNOSTIC (remove after fix confirmed) ───
+function diagnose() {
+  const canvas = document.getElementById('mapCanvas');
+  const cr = canvas.getBoundingClientRect();
+  console.log('[diagnose] canvas rect:', JSON.stringify(cr));
+  console.log('[diagnose] S.ranks:', S.ranks.map(r=>r.name));
+  console.log('[diagnose] S.layout keys:', [...S.layout.keys()]);
+  console.log('[diagnose] S.players count:', S.players.length);
+  console.log('[diagnose] selectedPlayer:', S.selectedPlayer ? 'yes' : 'null');
+  const nodes = document.querySelectorAll('.node');
+  console.log('[diagnose] DOM nodes found:', nodes.length);
+  nodes.forEach(n => {
+    const r = n.getBoundingClientRect();
+    console.log(`  node #${n.id} left=${n.style.left} top=${n.style.top} | rect w=${r.width} h=${r.height} x=${r.x} y=${r.y} | visible=${r.width>0&&r.height>0}`);
+  });
+}
+// Run diagnosis 1 second after load
+setTimeout(diagnose, 1000);
