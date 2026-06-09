@@ -290,8 +290,6 @@ function renderSidebar(prog) {
   document.getElementById('ringFill').style.strokeDashoffset = String(264 - (264 * prog.percent / 100));
   document.getElementById('nextRankName').textContent = prog.nextRank?.name || 'All complete';
   document.getElementById('nextRankDesc').textContent = prog.nextRank ? `${rem} requirements remaining` : 'The circle is complete';
-  document.getElementById('finalGoalName').textContent = prog.highestRemaining?.name || 'Legacy Secured';
-  document.getElementById('finalGoalDesc').textContent = prog.highestRemaining ? 'Highest rank remaining' : 'No ranks remaining';
 }
 
 function renderSelector() {
