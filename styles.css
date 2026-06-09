@@ -5,7 +5,7 @@
   --text:#f0e8f6; --text2:#c5b4d8; --text3:#9a87b0;
   --purple:#9b6dff; --purple2:#c4a0ff; --purple-glow:rgba(155,109,255,0.3);
   --gold:#f0c060; --green:#60d090; --green-glow:rgba(96,208,144,0.3);
-  --topbar-h:52px; --bnav-h:56px; --left-w:218px; --right-w:336px;
+  --topbar-h:52px; --bnav-h:56px; --left-w:218px; --right-w:500px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Crimson Pro',serif;overflow:hidden}
