@@ -362,7 +362,7 @@ function drawPaths(prog = getProgress(S.selectedPlayer)) {
     return 'locked';
   }
 
-  const colors = { completed: '#60d090', available: '#9b6dff', locked: '#4a3a60' };
+  const colors = { completed: '#f0c060', available: '#9b6dff', locked: '#4a3a60' };
   svg.innerHTML = S.connections.map(conn => {
     const a = center(conn.from), b = center(conn.to);
     if (!a || !b) return '';
