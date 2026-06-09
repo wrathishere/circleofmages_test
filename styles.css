@@ -4,7 +4,8 @@
   --border:rgba(255,255,255,0.08);  --border2:rgba(255,255,255,0.15);
   --text:#f0e8f6; --text2:#c5b4d8; --text3:#9a87b0;
   --purple:#9b6dff; --purple2:#c4a0ff; --purple-glow:rgba(155,109,255,0.3);
-  --gold:#f0c060; --green:#60d090; --green-glow:rgba(96,208,144,0.3);
+  --gold:#f0c060;   --yellow:#f0c060;
+  --yellow-glow:rgba(240,192,96,0.3);
   --topbar-h:52px; --bnav-h:56px; --left-w:218px; --right-w:500px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -79,7 +80,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Crimso
 .node:hover{transform:translate(-50%,calc(-50% - 2px))}
 .node:focus-visible{outline:1.5px solid rgba(155,109,255,.7);outline-offset:3px}
 .node.selected{outline:1.5px solid rgba(155,109,255,.7);z-index:10}
-.node-completed{border-color:rgba(96,208,144,.4);box-shadow:0 0 18px rgba(96,208,144,.08)}
+.node-completed{border-color:rgba(240,192,96,.4);box-shadow:0 0 18px rgba(240,192,96,.08)}
 .node-available{border-color:rgba(155,109,255,.5);box-shadow:0 0 22px rgba(155,109,255,.13)}
 .node-locked{border-color:var(--border);opacity:.6}
 .node-locked:hover{opacity:.82}
@@ -91,8 +92,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Crimso
 .node-title{font-family:'Cinzel',serif;font-size:12px;font-weight:600;color:var(--text);line-height:1.2;margin-bottom:3px}
 .node-status{display:flex;align-items:center;gap:4px;font-size:10px;font-family:'Cinzel',serif}
 .status-dot{width:5px;height:5px;border-radius:50%}
-.s-completed .status-dot{background:var(--green);box-shadow:0 0 5px var(--green)}
-.s-completed{color:var(--green)}
+.s-completed .status-dot{background:var(--yellow);box-shadow:0 0 5px var(--yellow)}
+.s-completed{color:var(--yellow)}
 .s-available .status-dot{background:var(--purple);animation:dotPulse 1.5s ease-in-out infinite}
 .s-available{color:var(--purple2)}
 .s-locked .status-dot{background:var(--text3)}
@@ -103,7 +104,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Crimso
 .check-item{display:flex;align-items:flex-start;gap:5px;font-size:10px;color:var(--text3);line-height:1.3}
 .check-item.done{color:var(--text2)}
 .check-icon{font-size:9px;margin-top:2px;flex-shrink:0}
-.check-icon.c{color:var(--green)}
+.check-icon.c{color:var(--yellow)
 .check-icon.x{color:var(--text3)}
 
 /* ── PATHS ── */
@@ -124,7 +125,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Crimso
 .detail-section-title{font-family:'Cinzel',serif;font-size:9px;letter-spacing:1.5px;color:var(--text3);margin-bottom:6px}
 .req-list{display:flex;flex-direction:column;gap:4px}
 .req-row{display:flex;align-items:flex-start;gap:7px;font-size:12px;line-height:1.3;padding:3px 0}
-.req-row.done{color:var(--green)}
+.req-row.done{color:var(--yellow)}
 .req-row.pending{color:var(--text2)}
 .req-circle{width:15px;height:15px;border-radius:50%;border:1.5px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:8px;flex-shrink:0;margin-top:1px}
 .req-name{color:inherit;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
@@ -160,15 +161,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Crimso
 .ip-row:hover{background:var(--surface)}
 .ip-row+.ip-row{border-top:1px solid var(--border)}
 .ip-check{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--text3);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;margin-top:1px;color:var(--text3)}
-.ip-done .ip-check{border-color:var(--green);color:var(--green);background:rgba(96,208,144,.1)}
+.ip-done .ip-check{border-color:var(--yellow);color:var(--yellow);background:rgba(240,192,96,.1)}
 .ip-info{flex:1;min-width:0}
 .ip-name{font-family:'Cinzel',serif;font-size:11px;color:var(--text);margin-bottom:3px}
 .ip-done .ip-name{color:var(--text2)}
 .ip-desc{font-size:11px;color:var(--text2);line-height:1.5;font-style:italic}
 .ip-notes{font-size:10px;color:var(--text3);margin-top:3px;font-style:italic}
 .ip-pts{font-family:'Cinzel',serif;font-size:13px;font-weight:700;color:var(--gold);flex-shrink:0;min-width:28px;text-align:right;margin-top:1px}
-.ip-done .ip-pts{color:var(--green)}
-
+.ip-done .ip-pts{color:var(--yellow)}
 /* ── BOTTOM BAR (desktop) ── */
 .bottom-bar{padding:8px 20px;background:rgba(10,6,8,.97);border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
 .bottom-icon{width:26px;height:26px;border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3)}
