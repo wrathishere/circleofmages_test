@@ -11,97 +11,110 @@
 <div class="app">
 
   <!-- TOPBAR -->
-   <header class="topbar">
+  <header class="topbar">
     <div class="topbar-logo">
       <div class="logo-icon">✦</div>
       <span class="logo-text">The Circle of Mages</span>
     </div>
   </header>
 
-  <!-- MAIN -->
+  <!-- MAIN — map canvas takes full width -->
   <div class="main">
-
-    <!-- LEFT PANEL -->
-    <aside class="left-panel" id="leftPanel">
-
-      <div class="panel-section-title">Player</div>
-      <select class="player-select" id="playerSelect" aria-label="Select player"></select>
-      <div class="player-card">
-        <div class="sidebar-item-icon current-rank-icon" id="currentRankIcon">✦</div>
-        <div class="sidebar-item-info">
-          <div class="si-name" id="sidebarPlayerName">Loading…</div>
-          <div class="si-desc">Rank: <span id="sidebarCurrentRank">—</span></div>
-          <div class="si-desc">Influence: <span id="sidebarInfluence">0</span></div>
-        </div>
-      </div>
-
-      <div class="panel-divider"></div>
-
-      <div class="panel-section-title">Guild Progress</div>
-      <div class="progress-ring-wrap">
-        <div class="prog-label">Overall Completion</div>
-        <div class="ring-container">
-          <svg class="ring-svg" viewBox="0 0 100 100">
-            <circle class="ring-bg"   cx="50" cy="50" r="42"/>
-            <circle class="ring-fill" id="ringFill" cx="50" cy="50" r="42"/>
-          </svg>
-          <div class="ring-text-wrap">
-            <div class="ring-pct" id="progressPercent">0%</div>
-            <div class="ring-sub" id="progressCounts">0 / 0 done</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel-divider"></div>
-
-      <div class="panel-section-title">Next Available</div>
-      <div class="sidebar-item">
-        <div class="sidebar-item-icon si-purple">🏔️</div>
-        <div class="sidebar-item-info">
-          <div class="si-name" id="nextRankName">Loading…</div>
-          <div class="si-desc" id="nextRankDesc">Calculating…</div>
-        </div>
-      </div>
-
-    </aside>
-
-    <!-- MAP CANVAS -->
     <div class="map-canvas" id="mapCanvas">
+
+      <!-- Background layers -->
+      <div class="map-bg-image"></div>
+      <div class="map-bg-overlay"></div>
       <div class="arcane-circle"></div>
       <svg class="map-svg" id="pathSvg"></svg>
-    </div>
 
-    <!-- RIGHT PANEL -->
-    <aside class="right-panel" id="rightPanel">
-      <button class="drawer-close" id="drawerClose" aria-label="Close">✕</button>
+      <!-- ── FLOATING STATUS BAR (top center) ── -->
+      <div class="status-bar" id="statusBar">
 
-      <div class="detail-header">
-        <div class="detail-icon" id="detailIcon">✦</div>
-        <div>
-          <div class="detail-title" id="detailTitle">SELECT A RANK</div>
-          <div class="detail-subtitle" id="detailSub">Tap a node to view details</div>
+        <!-- Player section -->
+        <div class="sb-section sb-player">
+          <select class="sb-select" id="playerSelect" aria-label="Select player">
+            <option value="" disabled selected>Select a Player</option>
+          </select>
+          <div class="sb-player-meta" id="sbPlayerMeta" style="display:none">
+            <span class="sb-rank" id="sbCurrentRank">—</span>
+            <span class="sb-influence" id="sbInfluence">0 Influence</span>
+          </div>
         </div>
-      </div>
 
-      <div class="detail-lore" id="detailLore">Choose a rank node on the map to explore its requirements and rewards.</div>
+        <div class="sb-divider"></div>
 
-      <div class="detail-section-title">REQUIREMENTS</div>
-      <div class="req-list" id="detailReqs"></div>
+        <!-- Progress ring section -->
+        <div class="sb-section sb-progress">
+          <div class="sb-ring-wrap">
+            <svg class="sb-ring-svg" viewBox="0 0 100 100">
+              <circle class="ring-bg"   cx="50" cy="50" r="42"/>
+              <circle class="ring-fill" id="ringFill" cx="50" cy="50" r="42"/>
+            </svg>
+            <div class="sb-ring-text">
+              <div class="sb-ring-pct" id="progressPercent">—</div>
+            </div>
+          </div>
+          <div class="sb-progress-label" id="progressCounts">Select a player</div>
+        </div>
 
-      <div class="detail-section-title">REWARDS</div>
-      <div class="rewards-grid" id="detailRewards"></div>
+        <div class="sb-divider"></div>
 
-      <div class="detail-section-title">REQUIREMENT DETAILS</div>
-      <div class="requirement-detail-card">
-        <div class="requirement-detail-name" id="requirementDetailName">Select a requirement above.</div>
-        <div class="requirement-detail-type" id="requirementDetailType"></div>
-        <div class="requirement-detail-description" id="requirementDetailDescription"></div>
-      </div>
-    </aside>
+        <!-- Next rank section -->
+        <div class="sb-section sb-next">
+          <div class="sb-next-rank" id="nextRankName">—</div>
+          <div class="sb-next-desc" id="nextRankDesc">—</div>
+        </div>
 
+      </div><!-- /status-bar -->
+
+      <!-- ── FLOATING DETAIL PANEL (top right) ── -->
+      <aside class="detail-panel" id="detailPanel">
+        <button class="detail-panel-close" id="detailPanelClose" aria-label="Close">✕</button>
+
+        <!-- Empty state -->
+        <div class="detail-empty" id="detailEmpty">
+          <div class="detail-empty-icon">✦</div>
+          <div class="detail-empty-text">Select a rank node<br>to view details</div>
+        </div>
+
+        <!-- Rank content (hidden until node selected) -->
+        <div class="detail-content" id="detailContent" style="display:none">
+
+          <div class="detail-header">
+            <div class="detail-icon" id="detailIcon">✦</div>
+            <div>
+              <div class="detail-title" id="detailTitle">—</div>
+              <div class="detail-subtitle" id="detailSub">—</div>
+            </div>
+          </div>
+
+          <div class="detail-lore" id="detailLore"></div>
+
+          <!-- Requirements -->
+          <div class="detail-section-title">REQUIREMENTS</div>
+          <div class="req-list" id="detailReqs"></div>
+
+          <!-- Requirement detail -->
+          <div class="requirement-detail-card" id="reqDetailCard" style="display:none">
+            <div class="requirement-detail-name" id="requirementDetailName"></div>
+            <div class="requirement-detail-type" id="requirementDetailType"></div>
+            <div class="requirement-detail-description" id="requirementDetailDescription"></div>
+          </div>
+
+          <!-- Rewards -->
+          <div class="detail-section-title">REWARDS</div>
+          <div class="reward-list" id="detailRewards"></div>
+
+        </div><!-- /detail-content -->
+      </aside><!-- /detail-panel -->
+
+      <!-- Nodes injected here by JS -->
+
+    </div><!-- /map-canvas -->
   </div><!-- /main -->
 
-  <!-- DRAWER BACKDROP -->
+  <!-- DRAWER BACKDROP (mobile) -->
   <div class="drawer-backdrop" id="drawerBackdrop"></div>
 
   <!-- INFLUENCE MODAL -->
@@ -118,10 +131,10 @@
       <div class="ip-task-list" id="ipTaskList"></div>
     </div>
   </div>
+
   <!-- BOTTOM NAV (mobile) -->
   <nav class="bottom-nav">
     <button class="bnav-btn active" data-view="map"><span class="bnav-icon">🗺️</span>Map</button>
-    <button class="bnav-btn" data-view="player"><span class="bnav-icon">👤</span>Player</button>
     <button class="bnav-btn" data-view="detail"><span class="bnav-icon">📜</span>Details</button>
   </nav>
 
