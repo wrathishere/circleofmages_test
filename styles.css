@@ -22,7 +22,7 @@ body::before {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  opacity: 1; 
+  opacity: .2; 
   z-index: -1; 
   pointer-events: none; 
 }
@@ -65,21 +65,25 @@ body::before {
 .panel-divider{height:1px;background:linear-gradient(to right,transparent,var(--border),transparent)}
 
 /* ── MAP CANVAS ── */
-.map-canvas{flex:1;position:relative;overflow:hidden;min-width:0;
-  background:radial-gradient(ellipse at 40% 50%,rgba(60,20,80,.4) 0%,transparent 60%),
-             radial-gradient(ellipse at 70% 70%,rgba(20,10,40,.6) 0%,transparent 50%),var(--bg)}
-.map-canvas::before{content:'';position:absolute;inset:0;
+.map-canvas{flex:1;position:relative;overflow:hidden;min-width:0;}
+.map-canvas::after{content:'';position:absolute;inset:0;
+  background-image:url('images/background.png');
+  background-size:cover;background-position:center;
+  opacity:0.3;z-index:0;pointer-events:none;}
+.map-canvas::before{content:'';position:absolute;inset:0;z-index:1;
+  background:radial-gradient(ellipse at 40% 50%,rgba(60,20,80,.6) 0%,transparent 60%),
+             radial-gradient(ellipse at 70% 70%,rgba(20,10,40,.7) 0%,transparent 50%);
   background-image:radial-gradient(circle at 50% 50%,rgba(155,109,255,.04) 0%,transparent 60%),
     repeating-linear-gradient(0deg,transparent,transparent 60px,rgba(255,255,255,.01) 61px),
     repeating-linear-gradient(90deg,transparent,transparent 60px,rgba(255,255,255,.01) 61px);
-  pointer-events:none}
-.arcane-circle{position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);width:600px;height:600px;border-radius:50%;border:1px solid rgba(155,109,255,.06);pointer-events:none}
+  pointer-events:none;}
+.arcane-circle{z-index:2;position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);width:600px;height:600px;border-radius:50%;border:1px solid rgba(155,109,255,.06);pointer-events:none}
 .arcane-circle::before{content:'';position:absolute;inset:40px;border-radius:50%;border:1px solid rgba(155,109,255,.04)}
 .arcane-circle::after{content:'';position:absolute;inset:80px;border-radius:50%;border:1px solid rgba(155,109,255,.03)}
-.map-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.map-svg{z-index:2;position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 
 /* ── NODE CARDS ── */
-.node{position:absolute;width:190px;background:rgba(12,8,18,.93);border:1px solid var(--border);border-radius:11px;cursor:pointer;backdrop-filter:blur(10px);
+.node{z-index:2;position:absolute;width:190px;background:rgba(12,8,18,.93);border:1px solid var(--border);border-radius:11px;cursor:pointer;backdrop-filter:blur(10px);
   appearance:none;color:inherit;font:inherit;text-align:left;
   transform:translate(-50%,-50%);
   transition:transform .2s,border-color .2s,box-shadow .2s}
