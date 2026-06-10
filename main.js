@@ -434,24 +434,85 @@ function renderReqDetail(req) {
 
 // ─── INFLUENCE MODAL ───
 function openInfluenceModal() {
-  const player=S.selectedPlayer;
-  document.getElementById('ipModalInfluence').textContent=`${getInfluence(player)} pts earned`;
-  document.getElementById('ipTaskList').innerHTML=S.influenceTasks.map(t=>{
-    const name=getField(t,'name'),desc=getField(t,'description','Description'),pts=getField(t,'points','Points'),notes=getField(t,'notes','Notes');
-    const done=isTruthy(getField(player,name));
-    return `<div class="ip-row${done?' ip-done':''}">
-      <div class="ip-check">${done?'✓':'○'}</div>
-      <div class="ip-info">
-        <div class="ip-name">${esc(name)}</div>
-        ${desc?`<div class="ip-desc">${parseFormatting(desc)}</div>`:''}
-        ${notes?`<div class="ip-notes">${parseFormatting(notes)}</div>`:''}
+  const player = S.selectedPlayer;
+  const influence = getInfluence(player);
+  
+  // Calculate total statistics
+  const totalTasks = S.influenceTasks.length;
+  const completedTasks = S.influenceTasks.filter(t => isTruthy(getField(player, getField(t, 'name')))).length;
+  const totalPointsPossible = S.influenceTasks.reduce((sum, t) => sum + parseInt(getField(t, 'points', 'Points') || '0', 10), 0);
+  
+  document.getElementById('ipModalInfluence').textContent = `${influence} / ${totalPointsPossible} pts • ${completedTasks} / ${totalTasks} done`;
+
+  // Handles active filter tab if configured, otherwise defaults to showing all
+  const activeTab = typeof currentIpTab !== 'undefined' ? currentIpTab : 'all';
+  const filtered = S.influenceTasks.filter(t => {
+    const name = getField(t, 'name');
+    const done = isTruthy(getField(player, name));
+    if (activeTab === 'completed') return done;
+    if (activeTab === 'pending') return !done;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    document.getElementById('ipTaskList').innerHTML = `<div style="color:var(--text3);padding:24px;text-align:center;font-style:italic;">No tasks found.</div>`;
+    return;
+  }
+
+  // Group tasks by category column
+  const groups = {};
+  filtered.forEach(t => {
+    const cat = getField(t, 'category') || 'General';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(t);
+  });
+
+  // Build the categorized HTML structure
+  let html = '';
+  for (const [categoryName, tasks] of Object.entries(groups)) {
+    html += `
+      <div class="ip-category-group">
+        <div class="ip-category-header">${esc(categoryName)}</div>
+        <div class="ip-category-list">
+          ${tasks.map(t => {
+            const name  = getField(t, 'name');
+            const desc  = getField(t, 'description', 'Description');
+            const pts   = getField(t, 'points', 'Points');
+            const notes = getField(t, 'notes', 'Notes');
+            const rep   = getField(t, 'repeatability');
+            const done  = isTruthy(getField(player, name));
+            return `
+              <div class="ip-row${done ? ' ip-done' : ''}">
+                <div class="ip-check">${done ? '✓' : '○'}</div>
+                <div class="ip-info">
+                  <div class="ip-name">${esc(name)}</div>
+                  ${desc  ? `<div class="ip-desc">${parseFormatting(desc)}</div>` : ''}
+                  ${notes ? `<div class="ip-notes">${parseFormatting(notes)}</div>` : ''}
+                </div>
+                ${rep ? `<div class="ip-repeat">${esc(rep)}</div>` : ''}
+                <div class="ip-pts">${pts ? `+${pts}` : ''}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
       </div>
-      <div class="ip-pts">${pts?`+${pts}`:''}</div>
-    </div>`;
-  }).join('')||'<div style="color:var(--text3);padding:12px;font-style:italic">No tasks found.</div>';
+    `;
+  }
+
+  document.getElementById('ipTaskList').innerHTML = html;
+  
+  // Updates active UI tabs if configured
+  document.querySelectorAll('.ip-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.tab === activeTab);
+  });
+
   document.getElementById('ipModal').classList.add('open');
 }
-function closeInfluenceModal(){document.getElementById('ipModal').classList.remove('open');}
+
+// Redirects rendering calls to the unified helper
+function renderInfluenceTasks() {
+  openInfluenceModal();
+}
 
 // ─── MOBILE DRAWER ───
 function openDrawer(){
