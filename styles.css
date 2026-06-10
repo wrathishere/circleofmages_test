@@ -82,7 +82,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 /* ── FLOATING DETAIL PANEL ── */
 .detail-panel{
-  position:absolute;top:16px;right:16px;
+  position:absolute;top:20px;right:30px;
   z-index:20;
   width:420px;max-height:80vh;
   background:rgba(12,8,20,.92);
