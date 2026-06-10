@@ -513,7 +513,9 @@ function openInfluenceModal() {
 function renderInfluenceTasks() {
   openInfluenceModal();
 }
-
+function closeInfluenceModal() {
+  document.getElementById('ipModal').classList.remove('open');
+}
 // ─── MOBILE DRAWER ───
 function openDrawer(){
   document.getElementById('detailPanel').classList.add('drawer-open');
