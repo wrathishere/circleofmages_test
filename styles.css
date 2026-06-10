@@ -71,8 +71,8 @@ body::before {
   background-size:cover;background-position:center;
   opacity:0.3;z-index:0;pointer-events:none;}
 .map-canvas::before{content:'';position:absolute;inset:0;z-index:1;
-  background:radial-gradient(ellipse at 40% 50%,rgba(60,20,80,.6) 0%,transparent 60%),
-             radial-gradient(ellipse at 70% 70%,rgba(20,10,40,.7) 0%,transparent 50%);
+  background:radial-gradient(ellipse at 40% 50%,rgba(60,20,80,.8) 0%,transparent 60%),
+             radial-gradient(ellipse at 70% 70%,rgba(20,10,40,.9) 0%,transparent 50%);
   background-image:radial-gradient(circle at 50% 50%,rgba(155,109,255,.04) 0%,transparent 60%),
     repeating-linear-gradient(0deg,transparent,transparent 60px,rgba(255,255,255,.01) 61px),
     repeating-linear-gradient(90deg,transparent,transparent 60px,rgba(255,255,255,.01) 61px);
