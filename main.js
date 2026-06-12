@@ -85,12 +85,6 @@ function getField(row, ...names) {
   return '';
 }
 
-function getRankName(row) {
-  const byField = getField(row,'name','rank name','rank');
-  if (byField) return byField;
-  return Object.values(row||{})[0] || '';
-}
-
 // ─── CSV ───
 function parseCsv(csv) {
   if (csv.charCodeAt(0) === 0xFEFF) csv = csv.slice(1);
@@ -254,6 +248,12 @@ function setBnavActive(view) {
 // ─── PLAYER LOGIC ───
 const getPlayerName = p => getField(p,'Player Name','player','name')||'Unknown';
 const getInfluence  = p => parseInt(getField(p,'Influence Points','influence')||'0',10);
+
+function getRankName(row) {
+  const byField = getField(row,'name','rank name','rank');
+  if (byField) return byField;
+  return Object.values(row||{})[0] || '';
+}
 
 function reqDone(player, req) {
   if(!player) return false;
@@ -542,7 +542,7 @@ function buildTrackData() {
   return Object.values(trackMap);
 }
 
-unction openInfluenceModal() {
+function openInfluenceModal() {
   const player = S.selectedPlayer;
   const stats = getIpTaskStats(player);
 
@@ -593,6 +593,7 @@ unction openInfluenceModal() {
 
   document.getElementById('ipModal').classList.add('open');
 }
+
 function renderIpTaskList() {
   const player = S.selectedPlayer;
   const catFilter    = document.getElementById('ipFilterCategory').value;
@@ -671,67 +672,6 @@ function renderIpTaskList() {
     </div>`;
   }
   document.getElementById('ipTaskList').innerHTML=html;
-}
-
-  document.querySelectorAll('#ipTaskList .ip-row').forEach(row=>{
-    row.addEventListener('click',()=>{
-      const tName=row.dataset.taskName;
-      const task=S.influenceTasks.find(t=>getField(t,'name')===tName);
-      if(task) showIpTaskDetail(task);
-    });
-  });
-}
-
-function showIpTaskDetail(task) {
-  S.activeIpTask=task;
-  const player=S.selectedPlayer;
-  const name    = getField(task,'name');
-  const desc    = getField(task,'description','Description');
-  const pts     = getField(task,'points','Points');
-  const maxPts  = getField(task,'max point','max points')||pts;
-  const cat     = getField(task,'category');
-  const rep     = getField(task,'repeatability');
-  const notes   = getField(task,'notes','Notes');
-  const types   = getIpTypes(task);
-
-  const earnedPts = player ? getTaskEarnedPoints(player, task) : 0;
-  const done = player ? (earnedPts >= maxPts) : false;
-  const started = player ? (earnedPts > 0 && earnedPts < maxPts) : false;
-
-  document.getElementById('ipDetailName').textContent=name;
-
-  const meta=[
-    pts?`<span class="ip-detail-badge pts">+${esc(pts)} pts${maxPts&&maxPts!==pts?` / ${esc(maxPts)} max`:''}</span>`:'',
-    cat?`<span class="ip-detail-badge cat">${esc(cat)}</span>`:'',
-    rep?`<span class="ip-detail-badge rep">${esc(rep)}</span>`:'',
-    ...types.map(t=>`<span class="ip-detail-badge">${esc(t)}</span>`)
-  ].filter(Boolean).join('');
-  document.getElementById('ipDetailMeta').innerHTML=meta;
-  document.getElementById('ipDetailDesc').innerHTML=parseFormatting(desc)||'<em style="color:var(--text3)">No description.</em>';
-
-  const notesWrap=document.getElementById('ipDetailNotesWrap');
-  if(notes){notesWrap.style.display='';document.getElementById('ipDetailNotes').innerHTML=parseFormatting(notes);}
-  else notesWrap.style.display='none';
-
-  const prog=document.getElementById('ipDetailProgress');
-  if (player) {
-    if (done) {
-      prog.innerHTML = `<strong style="color:var(--yellow)">✓ Completed (${earnedPts} / ${maxPts} pts)</strong>`;
-    } else if (started) {
-      prog.innerHTML = `<strong style="color:var(--purple2)">◐ In Progress (${earnedPts} / ${maxPts} pts)</strong>`;
-    } else {
-      prog.innerHTML = `<strong style="color:var(--text3)">○ Not Started (${earnedPts} / ${maxPts} pts)</strong>`;
-    }
-  } else {
-    prog.innerHTML = '<span style="color:var(--text3)">Select a player to see progress.</span>';
-  }
-
-  if(window.innerWidth>=900){
-    document.getElementById('ipTaskDetail').style.display='';
-  } else {
-    document.getElementById('ipTaskList').style.display='none';
-    document.getElementById('ipTaskDetail').style.display='';
-  }
 }
 
 function closeInfluenceModal() {
@@ -976,3 +916,4 @@ async function init() {
 let rafResize;
 window.addEventListener('resize',()=>{cancelAnimationFrame(rafResize);rafResize=requestAnimationFrame(()=>drawPaths());});
 document.addEventListener('DOMContentLoaded',init);
+--- END OF FILE main.js ---
