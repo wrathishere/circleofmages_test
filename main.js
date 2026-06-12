@@ -542,7 +542,7 @@ function buildTrackData() {
   return Object.values(trackMap);
 }
 
-function openInfluenceModal() {
+unction openInfluenceModal() {
   const player = S.selectedPlayer;
   const stats = getIpTaskStats(player);
 
@@ -587,20 +587,12 @@ function openInfluenceModal() {
 
   renderIpTaskList();
 
-  // Open detail task panel on desktop automatically
-  if (window.innerWidth >= 900) {
-    document.getElementById('ipTaskDetail').style.display = '';
-    if (!S.activeIpTask && S.influenceTasks.length > 0) {
-      showIpTaskDetail(S.influenceTasks[0]);
-    }
-  } else {
-    document.getElementById('ipTaskDetail').style.display = 'none';
-    document.getElementById('ipTaskList').style.display = '';
-  }
+  // Hide detail task sidebar permanently and let the list take full width
+  document.getElementById('ipTaskDetail').style.display = 'none';
+  document.getElementById('ipTaskList').style.display = '';
 
   document.getElementById('ipModal').classList.add('open');
 }
-
 function renderIpTaskList() {
   const player = S.selectedPlayer;
   const catFilter    = document.getElementById('ipFilterCategory').value;
@@ -650,6 +642,7 @@ function renderIpTaskList() {
         ${tasks.map(t=>{
           const name  = getField(t,'name');
           const desc  = getField(t,'description','Description');
+          const notes = getField(t,'notes','Notes');
           const maxPts = parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10);
           const rep   = getField(t,'repeatability');
           const types = getIpTypes(t);
@@ -658,17 +651,16 @@ function renderIpTaskList() {
           const done = player ? (earnedPts >= maxPts) : false;
           const started = player ? (earnedPts > 0 && earnedPts < maxPts) : false;
           
-          const active = S.activeIpTask && getField(S.activeIpTask,'name')===name;
-          
           const statusClass = done ? ' ip-done' : (started ? ' ip-started' : '');
           const checkSymbol = done ? '✓' : (started ? '◐' : '○');
           const ptsDisplay = player ? `${earnedPts} / ${maxPts}` : (maxPts ? `+${maxPts}` : '');
 
-          return `<div class="ip-row${statusClass}${active?' ip-row-active':''}" data-task-name="${esc(name)}">
+          return `<div class="ip-row${statusClass}" data-task-name="${esc(name)}">
             <div class="ip-check">${checkSymbol}</div>
             <div class="ip-info">
               <div class="ip-name">${esc(name)}</div>
               ${desc?`<div class="ip-desc">${parseFormatting(desc)}</div>`:''}
+              ${notes?`<div class="ip-notes"><strong>Notes:</strong> ${parseFormatting(notes)}</div>`:''}
               ${types.length?`<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`:''}
             </div>
             ${rep?`<div class="ip-repeat">${esc(rep)}</div>`:''}
@@ -679,6 +671,7 @@ function renderIpTaskList() {
     </div>`;
   }
   document.getElementById('ipTaskList').innerHTML=html;
+}
 
   document.querySelectorAll('#ipTaskList .ip-row').forEach(row=>{
     row.addEventListener('click',()=>{
