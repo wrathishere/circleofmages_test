@@ -847,7 +847,18 @@ function handleSearchSelect(type, label) {
     }
   } else if(type==='task'){
     const task=S.influenceTasks.find(t=>getField(t,'name')===label);
-    if(task){openInfluenceModal();setTimeout(()=>showIpTaskDetail(task),100);}
+    if(task){
+      openInfluenceModal();
+      // Wait for DOM nodes to render then scroll and flash highlight
+      setTimeout(()=>{
+        const row = Array.from(document.querySelectorAll('#ipTaskList .ip-row')).find(el => el.dataset.taskName === label);
+        if (row) {
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          row.classList.add('ip-row-highlight');
+          setTimeout(() => row.classList.remove('ip-row-highlight'), 2500);
+        }
+      }, 150);
+    }
   } else if(type==='reward'){
     const rank=S.ranks.find(r=>r.rewards.some(rw=>rw.name===label));
     if(rank){
