@@ -15,9 +15,9 @@ const FALLBACK = {
   ],
   reqs: [],
   influenceTasks: [
-    { name:'Airbender', Description:'Glide from a mountain to the ocean.', Points:'2' },
-    { name:'Happy Landing', Description:'Fly and land at Spawn.', Points:'2' },
-    { name:'Excess Energies', Description:'Donate 1 stack of Refined Eitr.', Points:'4' }
+    { name:'Airbender', description:'Glide from a mountain to the ocean.', points:'2' },
+    { name:'Happy Landing', description:'Fly and land at Spawn.', points:'2' },
+    { name:'Excess Energies', description:'Donate 1 stack of Refined Eitr.', points:'4' }
   ],
   tracker: [],
   nodelayout: [
@@ -33,7 +33,9 @@ const REWARD_ICONS = ['✦','🎩','🪄','🧥','🔮','💎','💣','🧪','�
 let S = {
   ranks:[], reqRegistry:new Map(), influenceTasks:[],
   players:[], layout:new Map(), connections:[],
-  selectedPlayer:null, selectedRankId:null, selectedReqName:null
+  selectedPlayer:null, selectedRankId:null, selectedReqName:null,
+  selectedReqData:null, activeReqTab:'instruction',
+  activeIpTask:null
 };
 
 // ─── UTILS ───
@@ -134,7 +136,14 @@ function buildReqRegistry(rows) {
   return new Map(rows.map(row=>{
     const name=getField(row,'name');
     if(!name) return null;
-    return [normKey(name),{name,type:getField(row,'type')||'Requirement',description:getField(row,'description','Description')}];
+    return [normKey(name),{
+      name,
+      type:getField(row,'type')||'Requirement',
+      description:getField(row,'description','Description'),
+      instruction:getField(row,'instruction','instructions'),
+      rules:getField(row,'rules'),
+      lore:getField(row,'lore','flavor')
+    }];
   }).filter(Boolean));
 }
 
@@ -147,18 +156,16 @@ function parseRank(row, index) {
     const rName=row[key].trim();
     if(!rName) return;
     const reg=S.reqRegistry.get(normKey(rName));
-    reqs.push({name:rName,description:reg?.description||'',type:reg?.type||'',isInfluence:false,_order:parseInt(m[1],10)});
+    reqs.push({name:rName,description:reg?.description||'',type:reg?.type||'',instruction:reg?.instruction||'',rules:reg?.rules||'',lore:reg?.lore||'',isInfluence:false,_order:parseInt(m[1],10)});
   });
   const ipVal=parseInt(getField(row,'influence points','influence'),10);
   if(ipVal>0) reqs.push({name:`${ipVal} Influence Points`,description:`Earn at least ${ipVal} influence points.`,type:'Influence',isInfluence:true,threshold:ipVal,_order:999});
   reqs.sort((a,b)=>a._order-b._order);
 
-  // Parse dynamic rewards: reward1, reward1_description, reward1_image ...
   const rewards = [];
-  for(let i=1;i<=10;i++){
-    const rName = getField(row,`reward${i}`,i===1?'rewards':'');
+  for(let i=1;i<=20;i++){
+    const rName = getField(row,`reward${i}`);
     if(!rName) {
-      // also check plain "rewards" only on first iteration via splitList
       if(i===1){
         const plain=splitList(getField(row,'rewards','reward'));
         if(plain.length) { plain.forEach(p=>rewards.push({name:p,description:'',image:''})); }
@@ -263,8 +270,6 @@ function iconImg(rank,cls='rank-icon-img'){return `<img class="${esc(cls)}" src=
 // ─── RENDER STATUS BAR ───
 function renderStatusBar(prog) {
   const player = S.selectedPlayer;
-
-  // Player meta
   const metaEl = document.getElementById('sbPlayerMeta');
   if(player){
     document.getElementById('sbCurrentRank').textContent = prog.currentRank||'Unranked';
@@ -273,16 +278,12 @@ function renderStatusBar(prog) {
   } else {
     metaEl.style.display = 'none';
   }
-
-  // Ring
   const pct = prog.percent;
   document.getElementById('progressPercent').textContent = player ? `${pct}%` : '—';
   document.getElementById('ringFill').style.strokeDashoffset = player ? String(264-(264*pct/100)) : '264';
   document.getElementById('progressCounts').textContent = player
     ? `${prog.completedRequirements} / ${prog.totalRequirements} Complete`
     : 'Select a player';
-
-  // Next rank
   document.getElementById('nextRankName').textContent = player
     ? (prog.nextRank?.name || 'All Complete')
     : '—';
@@ -403,9 +404,7 @@ function selectNode(id) {
   document.getElementById('detailReqs').innerHTML = rank.requirements.map((r,i)=>renderReqRow(r,S.selectedPlayer,i)).join('')||'<div class="req-row pending">No requirements.</div>';
   document.getElementById('detailRewards').innerHTML = rank.rewards.map(renderRewardItem).join('')||'<div style="color:var(--text3);font-size:12px;font-style:italic">No rewards listed.</div>';
 
-  // Hide req detail card until a req is clicked
   document.getElementById('reqDetailCard').style.display='none';
-
   document.querySelectorAll('.node').forEach(n=>n.classList.toggle('selected',n.dataset.rankId===rank.id));
 
   document.querySelectorAll('.req-button').forEach(btn=>{
@@ -415,6 +414,8 @@ function selectNode(id) {
       if(!req) return;
       if(req.isInfluence){openInfluenceModal();return;}
       S.selectedReqName=req.name;
+      S.selectedReqData=req;
+      S.activeReqTab='instruction';
       document.querySelectorAll('.req-button').forEach(b=>b.classList.toggle('selected',Number(b.dataset.reqIndex)===idx));
       renderReqDetail(req);
     });
@@ -423,99 +424,372 @@ function selectNode(id) {
   renderReqDetail(rank.requirements.find(r=>r.name===S.selectedReqName)||null);
 }
 
+// ─── FEATURE 4: Req detail with tabs ───
 function renderReqDetail(req) {
   const card=document.getElementById('reqDetailCard');
   if(!req){card.style.display='none';return;}
   card.style.display='';
+
   document.getElementById('requirementDetailName').textContent=req.name;
   document.getElementById('requirementDetailType').textContent=req.type?`Type: ${req.type}`:'';
   document.getElementById('requirementDetailDescription').innerHTML=parseFormatting(req.description||(req?'No description.':''));
+
+  const hasTabs = req.instruction||req.rules||req.lore;
+  const tabsEl = document.getElementById('reqTabs');
+  const contentEl = document.getElementById('reqTabContent');
+
+  if(hasTabs) {
+    tabsEl.style.display='';
+    renderReqTab(req, S.activeReqTab);
+
+    tabsEl.querySelectorAll('.req-tab').forEach(btn=>{
+      btn.classList.toggle('active', btn.dataset.tab===S.activeReqTab);
+      btn.onclick=()=>{
+        S.activeReqTab=btn.dataset.tab;
+        tabsEl.querySelectorAll('.req-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===S.activeReqTab));
+        renderReqTab(req, S.activeReqTab);
+      };
+    });
+  } else {
+    tabsEl.style.display='none';
+    contentEl.innerHTML='';
+  }
 }
 
-// ─── INFLUENCE MODAL ───
+function renderReqTab(req, tab) {
+  const contentEl=document.getElementById('reqTabContent');
+  const val = tab==='instruction'?req.instruction:tab==='rules'?req.rules:req.lore;
+  contentEl.innerHTML = val ? parseFormatting(val) : '<span style="color:var(--text3);font-style:italic">No content available.</span>';
+}
+
+// ─── FEATURE 6: INFLUENCE MODAL ───
+function getIpTaskStats(player) {
+  const tasks = S.influenceTasks;
+  const totalMax = tasks.reduce((s,t)=>s+parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10),0);
+  const earned = player ? getInfluence(player) : 0;
+  // Count done using player tracker columns
+  const done = player ? tasks.filter(t=>isTruthy(getField(player,getField(t,'name')))).length : 0;
+  return {earned, totalMax, remaining:Math.max(0,totalMax-earned), pct:totalMax?Math.round(earned/totalMax*100):0, done, total:tasks.length};
+}
+
+function getIpTypes(task) {
+  const t1=getField(task,'type1');
+  const t2=getField(task,'type2');
+  const t3=getField(task,'type3');
+  return [t1,t2,t3].filter(Boolean);
+}
+
+function buildTrackData() {
+  // Achievement tracks: collect unique type values across all tasks
+  const trackMap = {};
+  S.influenceTasks.forEach(t=>{
+    getIpTypes(t).forEach(type=>{
+      if(!trackMap[type]) trackMap[type]={name:type,earned:0,max:0};
+      const pts = parseInt(getField(t,'points','Points')||'0',10);
+      const maxPts = parseInt(getField(t,'max point','max points')||pts,10);
+      trackMap[type].max += maxPts;
+    });
+  });
+  // Add player progress
+  if(S.selectedPlayer) {
+    S.influenceTasks.forEach(t=>{
+      const name=getField(t,'name');
+      const pts=parseInt(getField(t,'points','Points')||'0',10);
+      const done=isTruthy(getField(S.selectedPlayer,name));
+      if(done) {
+        getIpTypes(t).forEach(type=>{
+          if(trackMap[type]) trackMap[type].earned+=pts;
+        });
+      }
+    });
+  }
+  return Object.values(trackMap);
+}
+
 function openInfluenceModal() {
   const player = S.selectedPlayer;
-  const influence = getInfluence(player);
-  
-  // Calculate total statistics
-  const totalTasks = S.influenceTasks.length;
-  const completedTasks = S.influenceTasks.filter(t => isTruthy(getField(player, getField(t, 'name')))).length;
-  const totalPointsPossible = S.influenceTasks.reduce((sum, t) => sum + parseInt(getField(t, 'points', 'Points') || '0', 10), 0);
-  
-  document.getElementById('ipModalInfluence').textContent = `${influence} / ${totalPointsPossible} pts • ${completedTasks} / ${totalTasks} done`;
+  const stats = getIpTaskStats(player);
 
-  // Handles active filter tab if configured, otherwise defaults to showing all
-  const activeTab = typeof currentIpTab !== 'undefined' ? currentIpTab : 'all';
-  const filtered = S.influenceTasks.filter(t => {
-    const name = getField(t, 'name');
-    const done = isTruthy(getField(player, name));
-    if (activeTab === 'completed') return done;
-    if (activeTab === 'pending') return !done;
-    return true;
-  });
+  // Overview
+  document.getElementById('ipStatEarned').textContent    = stats.earned;
+  document.getElementById('ipStatMax').textContent       = stats.totalMax;
+  document.getElementById('ipStatRemaining').textContent = stats.remaining;
+  document.getElementById('ipStatPct').textContent       = `${stats.pct}%`;
+  document.getElementById('ipModalInfluence').textContent = `${stats.earned} / ${stats.totalMax} pts`;
 
-  if (filtered.length === 0) {
-    document.getElementById('ipTaskList').innerHTML = `<div style="color:var(--text3);padding:24px;text-align:center;font-style:italic;">No tasks found.</div>`;
-    return;
+  // Achievement tracks
+  const tracks = buildTrackData();
+  const tracksEl = document.getElementById('ipTracks');
+  const tracksSection = document.getElementById('ipTracksSection');
+  if(tracks.length) {
+    tracksSection.style.display='';
+    tracksEl.innerHTML = tracks.map(tr=>`
+      <div class="ip-track">
+        <div class="ip-track-name">${esc(tr.name)}</div>
+        <div class="ip-track-bar-wrap"><div class="ip-track-bar" style="width:${tr.max?Math.round(tr.earned/tr.max*100):0}%"></div></div>
+        <div class="ip-track-meta">${tr.earned} / ${tr.max} pts</div>
+      </div>`).join('');
+  } else {
+    tracksSection.style.display='none';
   }
 
-  // Group tasks by category column
-  const groups = {};
-  filtered.forEach(t => {
-    const cat = getField(t, 'category') || 'General';
-    if (!groups[cat]) groups[cat] = [];
-    groups[cat].push(t);
-  });
+  // Populate category filter
+  const catSel = document.getElementById('ipFilterCategory');
+  const cats = [...new Set(S.influenceTasks.map(t=>getField(t,'category')).filter(Boolean))];
+  catSel.innerHTML = `<option value="">All Categories</option>` + cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
 
-  // Build the categorized HTML structure
-  let html = '';
-  for (const [categoryName, tasks] of Object.entries(groups)) {
-    html += `
-      <div class="ip-category-group">
-        <div class="ip-category-header">${esc(categoryName)}</div>
-        <div class="ip-category-list">
-          ${tasks.map(t => {
-            const name  = getField(t, 'name');
-            const desc  = getField(t, 'description', 'Description');
-            const pts   = getField(t, 'points', 'Points');
-            const notes = getField(t, 'notes', 'Notes');
-            const rep   = getField(t, 'repeatability');
-            const done  = isTruthy(getField(player, name));
-            return `
-              <div class="ip-row${done ? ' ip-done' : ''}">
-                <div class="ip-check">${done ? '✓' : '○'}</div>
-                <div class="ip-info">
-                  <div class="ip-name">${esc(name)}</div>
-                  ${desc  ? `<div class="ip-desc">${parseFormatting(desc)}</div>` : ''}
-                  ${notes ? `<div class="ip-notes">${parseFormatting(notes)}</div>` : ''}
-                </div>
-                ${rep ? `<div class="ip-repeat">${esc(rep)}</div>` : ''}
-                <div class="ip-pts">${pts ? `+${pts}` : ''}</div>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      </div>
-    `;
-  }
+  renderIpTaskList();
 
-  document.getElementById('ipTaskList').innerHTML = html;
-  
-  // Updates active UI tabs if configured
-  document.querySelectorAll('.ip-tab').forEach(tab => {
-    tab.classList.toggle('active', tab.dataset.tab === activeTab);
-  });
+  // Close detail panel, show list
+  document.getElementById('ipTaskDetail').style.display='none';
+  document.getElementById('ipTaskList').style.display='';
 
   document.getElementById('ipModal').classList.add('open');
 }
 
-// Redirects rendering calls to the unified helper
-function renderInfluenceTasks() {
-  openInfluenceModal();
+function renderIpTaskList() {
+  const player = S.selectedPlayer;
+  const catFilter    = document.getElementById('ipFilterCategory').value;
+  const statusFilter = document.getElementById('ipFilterStatus').value;
+  const repeatFilter = document.getElementById('ipFilterRepeat').value;
+  const search       = document.getElementById('ipFilterSearch').value.trim().toLowerCase();
+
+  const filtered = S.influenceTasks.filter(t=>{
+    const name   = getField(t,'name');
+    const cat    = getField(t,'category');
+    const rep    = getField(t,'repeatability').toLowerCase();
+    const done   = player ? isTruthy(getField(player,name)) : false;
+
+    if(catFilter && cat !== catFilter) return false;
+    if(statusFilter==='completed' && !done) return false;
+    if(statusFilter==='incomplete' && done) return false;
+    if(repeatFilter==='repeatable' && !rep) return false;
+    if(repeatFilter==='once' && rep) return false;
+    if(search && !name.toLowerCase().includes(search) && !getField(t,'description','Description').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if(!filtered.length) {
+    document.getElementById('ipTaskList').innerHTML=`<div style="color:var(--text3);padding:24px;text-align:center;font-style:italic;">No tasks found.</div>`;
+    return;
+  }
+
+  const groups={};
+  filtered.forEach(t=>{
+    const cat=getField(t,'category')||'General';
+    if(!groups[cat]) groups[cat]=[];
+    groups[cat].push(t);
+  });
+
+  let html='';
+  for(const [catName,tasks] of Object.entries(groups)){
+    html+=`<div class="ip-category-group">
+      <div class="ip-category-header">${esc(catName)}</div>
+      <div class="ip-category-list">
+        ${tasks.map(t=>{
+          const name  = getField(t,'name');
+          const desc  = getField(t,'description','Description');
+          const pts   = getField(t,'points','Points');
+          const rep   = getField(t,'repeatability');
+          const types = getIpTypes(t);
+          const done  = player ? isTruthy(getField(player,name)) : false;
+          const active = S.activeIpTask && getField(S.activeIpTask,'name')===name;
+          return `<div class="ip-row${done?' ip-done':''}${active?' ip-row-active':''}" data-task-name="${esc(name)}">
+            <div class="ip-check">${done?'✓':'○'}</div>
+            <div class="ip-info">
+              <div class="ip-name">${esc(name)}</div>
+              ${desc?`<div class="ip-desc">${parseFormatting(desc)}</div>`:''}
+              ${types.length?`<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`:''}
+            </div>
+            ${rep?`<div class="ip-repeat">${esc(rep)}</div>`:''}
+            <div class="ip-pts">${pts?`+${pts}`:''}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+  document.getElementById('ipTaskList').innerHTML=html;
+
+  // Attach click for detail
+  document.querySelectorAll('#ipTaskList .ip-row').forEach(row=>{
+    row.addEventListener('click',()=>{
+      const tName=row.dataset.taskName;
+      const task=S.influenceTasks.find(t=>getField(t,'name')===tName);
+      if(task) showIpTaskDetail(task);
+    });
+  });
 }
+
+function showIpTaskDetail(task) {
+  S.activeIpTask=task;
+  const player=S.selectedPlayer;
+  const name    = getField(task,'name');
+  const desc    = getField(task,'description','Description');
+  const pts     = getField(task,'points','Points');
+  const maxPts  = getField(task,'max point','max points')||pts;
+  const cat     = getField(task,'category');
+  const rep     = getField(task,'repeatability');
+  const notes   = getField(task,'notes','Notes');
+  const types   = getIpTypes(task);
+  const done    = player ? isTruthy(getField(player,name)) : false;
+
+  document.getElementById('ipDetailName').textContent=name;
+
+  const meta=[
+    pts?`<span class="ip-detail-badge pts">+${esc(pts)} pts${maxPts&&maxPts!==pts?` / ${esc(maxPts)} max`:''}</span>`:'',
+    cat?`<span class="ip-detail-badge cat">${esc(cat)}</span>`:'',
+    rep?`<span class="ip-detail-badge rep">${esc(rep)}</span>`:'',
+    ...types.map(t=>`<span class="ip-detail-badge">${esc(t)}</span>`)
+  ].filter(Boolean).join('');
+  document.getElementById('ipDetailMeta').innerHTML=meta;
+  document.getElementById('ipDetailDesc').innerHTML=parseFormatting(desc)||'<em style="color:var(--text3)">No description.</em>';
+
+  const notesWrap=document.getElementById('ipDetailNotesWrap');
+  if(notes){notesWrap.style.display='';document.getElementById('ipDetailNotes').innerHTML=parseFormatting(notes);}
+  else notesWrap.style.display='none';
+
+  const prog=document.getElementById('ipDetailProgress');
+  prog.innerHTML=player
+    ? `<strong style="color:${done?'var(--yellow)':'var(--text2)'}">${done?'✓ Completed':'○ Not completed'}</strong>`
+    : '<span style="color:var(--text3)">Select a player to see progress.</span>';
+
+  // On mobile, hide list and show detail; on desktop show side panel
+  if(window.innerWidth>=900){
+    document.getElementById('ipTaskDetail').style.display='';
+  } else {
+    document.getElementById('ipTaskList').style.display='none';
+    document.getElementById('ipTaskDetail').style.display='';
+  }
+}
+
 function closeInfluenceModal() {
   document.getElementById('ipModal').classList.remove('open');
+  S.activeIpTask=null;
 }
+
+// ─── FEATURE 7: SEARCH MODAL ───
+function openSearchModal() {
+  document.getElementById('searchModal').classList.add('open');
+  setTimeout(()=>document.getElementById('searchInput').focus(),100);
+}
+function closeSearchModal() {
+  document.getElementById('searchModal').classList.remove('open');
+}
+
+function buildSearchIndex() {
+  const items=[];
+
+  // Ranks
+  S.ranks.forEach(r=>{
+    items.push({type:'rank',icon:'⬡',label:r.name,sub:r.description||r.lore||'',badge:'Rank',data:r});
+  });
+
+  // Requirements
+  S.reqRegistry.forEach(req=>{
+    items.push({type:'req',icon:'📋',label:req.name,sub:req.description||'',badge:req.type||'Requirement',data:req});
+  });
+
+  // Influence tasks
+  S.influenceTasks.forEach(t=>{
+    const name=getField(t,'name');
+    if(!name) return;
+    items.push({type:'task',icon:'🔮',label:name,sub:getField(t,'description','Description')||'',badge:`+${getField(t,'points','Points')||'?'} pts`,data:t});
+  });
+
+  // Rewards (from ranks)
+  S.ranks.forEach(r=>{
+    r.rewards.forEach(rw=>{
+      items.push({type:'reward',icon:'✦',label:rw.name,sub:rw.description||`Reward from ${r.name}`,badge:'Reward',data:{...rw,rankId:r.id,rankName:r.name}});
+    });
+  });
+
+  return items;
+}
+
+function runSearch(query) {
+  const q=query.trim().toLowerCase();
+  const resultsEl=document.getElementById('searchResults');
+
+  if(!q){
+    resultsEl.innerHTML=`<div class="search-empty"><div class="search-empty-icon">✦</div><div class="search-empty-text">Begin typing to search the Codex</div></div>`;
+    return;
+  }
+
+  const index=buildSearchIndex();
+  const matches=index.filter(item=>
+    item.label.toLowerCase().includes(q)||
+    item.sub.toLowerCase().includes(q)||
+    item.badge.toLowerCase().includes(q)
+  );
+
+  if(!matches.length){
+    resultsEl.innerHTML=`<div class="search-no-results">No results for "<strong>${esc(query)}</strong>"</div>`;
+    return;
+  }
+
+  const groups={rank:[],req:[],task:[],reward:[]};
+  const groupLabels={rank:'Ranks',req:'Requirements',task:'Influence Tasks',reward:'Rewards'};
+  matches.forEach(m=>groups[m.type]?.push(m));
+
+  let html='';
+  for(const [type,items] of Object.entries(groups)){
+    if(!items.length) continue;
+    html+=`<div class="search-group">
+      <div class="search-group-title">${groupLabels[type]}</div>
+      ${items.map(item=>`
+        <div class="search-result-item" data-result-type="${type}" data-result-label="${esc(item.label)}">
+          <div class="search-result-icon">${item.icon}</div>
+          <div class="search-result-info">
+            <div class="search-result-name">${esc(item.label)}</div>
+            ${item.sub?`<div class="search-result-sub">${esc(item.sub.slice(0,80))}${item.sub.length>80?'…':''}</div>`:''}
+          </div>
+          <div class="search-result-badge">${esc(item.badge)}</div>
+        </div>`).join('')}
+    </div>`;
+  }
+  resultsEl.innerHTML=html;
+
+  resultsEl.querySelectorAll('.search-result-item').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const type=el.dataset.resultType;
+      const label=el.dataset.resultLabel;
+      handleSearchSelect(type,label);
+    });
+  });
+}
+
+function handleSearchSelect(type, label) {
+  closeSearchModal();
+  if(type==='rank'){
+    const rank=S.ranks.find(r=>r.name===label);
+    if(rank){
+      S.selectedRankId=rank.id;
+      selectNode(rank.id);
+      if(window.innerWidth<900) openDrawer();
+    }
+  } else if(type==='req'){
+    // Find first rank containing this req
+    const rank=S.ranks.find(r=>r.requirements.some(q=>q.name===label));
+    if(rank){
+      S.selectedRankId=rank.id;
+      S.selectedReqName=label;
+      selectNode(rank.id);
+      if(window.innerWidth<900) openDrawer();
+    }
+  } else if(type==='task'){
+    const task=S.influenceTasks.find(t=>getField(t,'name')===label);
+    if(task){openInfluenceModal();setTimeout(()=>showIpTaskDetail(task),100);}
+  } else if(type==='reward'){
+    // Find rank with this reward and open it
+    const rank=S.ranks.find(r=>r.rewards.some(rw=>rw.name===label));
+    if(rank){
+      S.selectedRankId=rank.id;
+      selectNode(rank.id);
+      if(window.innerWidth<900) openDrawer();
+    }
+  }
+}
+
 // ─── MOBILE DRAWER ───
 function openDrawer(){
   document.getElementById('detailPanel').classList.add('drawer-open');
@@ -533,6 +807,8 @@ function initBottomNav() {
       btn.classList.add('active');
       if(btn.dataset.view==='map') closeDrawer();
       else if(btn.dataset.view==='detail') openDrawer();
+      else if(btn.dataset.view==='search') openSearchModal();
+      else if(btn.dataset.view==='influence') openInfluenceModal();
     });
   });
 }
@@ -561,7 +837,7 @@ async function refresh() {
 // ─── INIT ───
 async function init() {
   applyData(await loadAll());
-  S.selectedPlayer = null; // No default selection
+  S.selectedPlayer = null;
 
   document.getElementById('playerSelect').addEventListener('change',e=>{
     const val=e.target.value;
@@ -572,8 +848,44 @@ async function init() {
 
   document.getElementById('drawerBackdrop').addEventListener('click',closeDrawer);
   document.getElementById('detailPanelClose').addEventListener('click',closeDrawer);
+
+  // Influence modal
   document.getElementById('ipModalClose').addEventListener('click',closeInfluenceModal);
   document.getElementById('ipModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeInfluenceModal();});
+  document.getElementById('ipDetailBack').addEventListener('click',()=>{
+    S.activeIpTask=null;
+    document.getElementById('ipTaskDetail').style.display='none';
+    document.getElementById('ipTaskList').style.display='';
+  });
+
+  // Filter live updates
+  ['ipFilterCategory','ipFilterStatus','ipFilterRepeat'].forEach(id=>{
+    document.getElementById(id).addEventListener('change',renderIpTaskList);
+  });
+  document.getElementById('ipFilterSearch').addEventListener('input',renderIpTaskList);
+
+  // Topbar buttons
+  document.getElementById('searchBtn').addEventListener('click',openSearchModal);
+  document.getElementById('influenceNavBtn').addEventListener('click',openInfluenceModal);
+
+  // Search modal
+  document.getElementById('searchModalClose').addEventListener('click',closeSearchModal);
+  document.getElementById('searchModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeSearchModal();});
+  document.getElementById('searchInput').addEventListener('input',e=>runSearch(e.target.value));
+  document.getElementById('searchClear').addEventListener('click',()=>{
+    document.getElementById('searchInput').value='';
+    document.getElementById('searchClear').style.display='none';
+    runSearch('');
+  });
+  document.getElementById('searchInput').addEventListener('input',e=>{
+    document.getElementById('searchClear').style.display=e.target.value?'':'none';
+  });
+
+  // Keyboard shortcut: Cmd/Ctrl+K for search
+  document.addEventListener('keydown',e=>{
+    if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openSearchModal();}
+    if(e.key==='Escape'){closeSearchModal();closeInfluenceModal();}
+  });
 
   initBottomNav();
   renderApp();
