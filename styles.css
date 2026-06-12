@@ -414,5 +414,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 @media(max-width:380px){
   .logo-text{display:none}
+/* Partial / Started progress styling for task list */
+.ip-row.ip-started .ip-check {
+  border-color: var(--purple2);
+  color: var(--purple2);
+  background: rgba(155, 109, 255, 0.1);
+}
+.ip-row.ip-started .ip-name {
+  color: var(--text2);
+}
   .node{width:148px}
 }
