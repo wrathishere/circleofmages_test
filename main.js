@@ -1,6 +1,13 @@
 // ─── CONFIG ───
 const SHEET_ID = '1FFEg75S6-HKlN58pMROvtTkBry1FYGrVruPsUbaf4qA';
-const SHEET_NAMES = { ranks:'ranks', reqs:'reqs', influenceTasks:'influence points', tracker:'tracker', layout:'nodelayout' };
+const SHEET_NAMES = { 
+  ranks: 'ranks', 
+  reqs: 'reqs', 
+  influenceTasks: 'influence points', 
+  tracker: 'tracker', 
+  layout: 'nodelayout',
+  influenceStat: 'influence stat'
+};
 const RANK_ICON_PATH   = 'images/ranks/';
 const REWARD_ICON_PATH = 'images/rewards/';
 const DEFAULT_RANK_ICON   = `${RANK_ICON_PATH}default.png`;
@@ -35,7 +42,8 @@ let S = {
   players:[], layout:new Map(), connections:[],
   selectedPlayer:null, selectedRankId:null, selectedReqName:null,
   selectedReqData:null, activeReqTab:'instruction',
-  activeIpTask:null
+  activeIpTask:null,
+  influenceStat: []
 };
 
 // ─── UTILS ───
@@ -121,14 +129,15 @@ async function loadSheet(name, fallback=[], optional=false) {
 }
 
 async function loadAll() {
-  const [ranks,reqs,influenceTasks,tracker,nodelayout] = await Promise.all([
+  const [ranks,reqs,influenceTasks,tracker,nodelayout,influenceStat] = await Promise.all([
     loadSheet(SHEET_NAMES.ranks,         FALLBACK.ranks),
     loadSheet(SHEET_NAMES.reqs,          FALLBACK.reqs, true),
     loadSheet(SHEET_NAMES.influenceTasks,FALLBACK.influenceTasks, true),
     loadSheet(SHEET_NAMES.tracker,       FALLBACK.tracker),
-    loadSheet(SHEET_NAMES.layout,        FALLBACK.nodelayout)
+    loadSheet(SHEET_NAMES.layout,        FALLBACK.nodelayout),
+    loadSheet(SHEET_NAMES.influenceStat, [], true)
   ]);
-  return {ranks,reqs,influenceTasks,tracker,nodelayout};
+  return {ranks,reqs,influenceTasks,tracker,nodelayout,influenceStat};
 }
 
 // ─── PARSERS ───
@@ -210,9 +219,36 @@ function applyData(data) {
   S.influenceTasks = data.influenceTasks;
   S.ranks          = data.ranks.map((r,i)=>parseRank(r,i)).filter(r=>r.name);
   S.players        = data.tracker;
+  S.influenceStat  = data.influenceStat || [];
   const {layout,connections} = parseLayoutAndConnections(data.nodelayout);
   S.layout      = layout;
   S.connections = connections.length ? connections : S.ranks.slice(1).map((r,i)=>({from:S.ranks[i].id,to:r.id}));
+}
+
+// ─── INFLUENCE STAT ROW MATCHERS ───
+function getPlayerInfluenceStatRow(player) {
+  if (!player || !S.influenceStat.length) return null;
+  const pName = normKey(getPlayerName(player));
+  return S.influenceStat.find(row => {
+    const rowName = getField(row, 'Player Name', 'player', 'name');
+    return normKey(rowName) === pName;
+  });
+}
+
+function getTaskEarnedPoints(player, task) {
+  const row = getPlayerInfluenceStatRow(player);
+  if (!row) return 0;
+  const tName = getField(task, 'name');
+  const val = getField(row, tName);
+  const parsed = parseInt(val, 10);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+// ─── BOTTOM NAVIGATION HELPER ───
+function setBnavActive(view) {
+  document.querySelectorAll('.bnav-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === view);
+  });
 }
 
 // ─── PLAYER LOGIC ───
@@ -424,7 +460,7 @@ function selectNode(id) {
   renderReqDetail(rank.requirements.find(r=>r.name===S.selectedReqName)||null);
 }
 
-// ─── FEATURE 4: Req detail with tabs ───
+// ─── REQ DETAILS & TABS ───
 function renderReqDetail(req) {
   const card=document.getElementById('reqDetailCard');
   if(!req){card.style.display='none';return;}
@@ -462,16 +498,7 @@ function renderReqTab(req, tab) {
   contentEl.innerHTML = val ? parseFormatting(val) : '<span style="color:var(--text3);font-style:italic">No content available.</span>';
 }
 
-// ─── FEATURE 6: INFLUENCE MODAL ───
-function getIpTaskStats(player) {
-  const tasks = S.influenceTasks;
-  const totalMax = tasks.reduce((s,t)=>s+parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10),0);
-  const earned = player ? getInfluence(player) : 0;
-  // Count done using player tracker columns
-  const done = player ? tasks.filter(t=>isTruthy(getField(player,getField(t,'name')))).length : 0;
-  return {earned, totalMax, remaining:Math.max(0,totalMax-earned), pct:totalMax?Math.round(earned/totalMax*100):0, done, total:tasks.length};
-}
-
+// ─── INFLUENCE MODAL (EXPANDED DASHBOARD) ───
 function getIpTypes(task) {
   const t1=getField(task,'type1');
   const t2=getField(task,'type2');
@@ -479,8 +506,19 @@ function getIpTypes(task) {
   return [t1,t2,t3].filter(Boolean);
 }
 
+function getIpTaskStats(player) {
+  const tasks = S.influenceTasks;
+  const totalMax = tasks.reduce((s,t)=>s+parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10),0);
+  const earned = player ? getInfluence(player) : 0; 
+  const done = player ? tasks.filter(t => {
+    const earnedPts = getTaskEarnedPoints(player, t);
+    const maxPts = parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10);
+    return earnedPts >= maxPts;
+  }).length : 0;
+  return {earned, totalMax, remaining:Math.max(0,totalMax-earned), pct:totalMax?Math.round(earned/totalMax*100):0, done, total:tasks.length};
+}
+
 function buildTrackData() {
-  // Achievement tracks: collect unique type values across all tasks
   const trackMap = {};
   S.influenceTasks.forEach(t=>{
     getIpTypes(t).forEach(type=>{
@@ -490,17 +528,15 @@ function buildTrackData() {
       trackMap[type].max += maxPts;
     });
   });
-  // Add player progress
+
   if(S.selectedPlayer) {
     S.influenceTasks.forEach(t=>{
-      const name=getField(t,'name');
-      const pts=parseInt(getField(t,'points','Points')||'0',10);
-      const done=isTruthy(getField(S.selectedPlayer,name));
-      if(done) {
-        getIpTypes(t).forEach(type=>{
-          if(trackMap[type]) trackMap[type].earned+=pts;
-        });
-      }
+      const earnedPts = getTaskEarnedPoints(S.selectedPlayer, t);
+      getIpTypes(t).forEach(type=>{
+        if(trackMap[type]) {
+          trackMap[type].earned += earnedPts;
+        }
+      });
     });
   }
   return Object.values(trackMap);
@@ -540,9 +576,16 @@ function openInfluenceModal() {
 
   renderIpTaskList();
 
-  // Close detail panel, show list
-  document.getElementById('ipTaskDetail').style.display='none';
-  document.getElementById('ipTaskList').style.display='';
+  // Desktop double column alignment
+  if (window.innerWidth >= 900) {
+    document.getElementById('ipTaskDetail').style.display = '';
+    if (!S.activeIpTask && S.influenceTasks.length > 0) {
+      showIpTaskDetail(S.influenceTasks[0]);
+    }
+  } else {
+    document.getElementById('ipTaskDetail').style.display = 'none';
+    document.getElementById('ipTaskList').style.display = '';
+  }
 
   document.getElementById('ipModal').classList.add('open');
 }
@@ -558,7 +601,10 @@ function renderIpTaskList() {
     const name   = getField(t,'name');
     const cat    = getField(t,'category');
     const rep    = getField(t,'repeatability').toLowerCase();
-    const done   = player ? isTruthy(getField(player,name)) : false;
+    
+    const earnedPts = player ? getTaskEarnedPoints(player, t) : 0;
+    const maxPts = parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10);
+    const done = player ? (earnedPts >= maxPts) : false;
 
     if(catFilter && cat !== catFilter) return false;
     if(statusFilter==='completed' && !done) return false;
@@ -589,20 +635,29 @@ function renderIpTaskList() {
         ${tasks.map(t=>{
           const name  = getField(t,'name');
           const desc  = getField(t,'description','Description');
-          const pts   = getField(t,'points','Points');
+          const maxPts = parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10);
           const rep   = getField(t,'repeatability');
           const types = getIpTypes(t);
-          const done  = player ? isTruthy(getField(player,name)) : false;
+          
+          const earnedPts = player ? getTaskEarnedPoints(player, t) : 0;
+          const done = player ? (earnedPts >= maxPts) : false;
+          const started = player ? (earnedPts > 0 && earnedPts < maxPts) : false;
+          
           const active = S.activeIpTask && getField(S.activeIpTask,'name')===name;
-          return `<div class="ip-row${done?' ip-done':''}${active?' ip-row-active':''}" data-task-name="${esc(name)}">
-            <div class="ip-check">${done?'✓':'○'}</div>
+          
+          const statusClass = done ? ' ip-done' : (started ? ' ip-started' : '');
+          const checkSymbol = done ? '✓' : (started ? '◐' : '○');
+          const ptsDisplay = player ? `${earnedPts} / ${maxPts}` : (maxPts ? `+${maxPts}` : '');
+
+          return `<div class="ip-row${statusClass}${active?' ip-row-active':''}" data-task-name="${esc(name)}">
+            <div class="ip-check">${checkSymbol}</div>
             <div class="ip-info">
               <div class="ip-name">${esc(name)}</div>
               ${desc?`<div class="ip-desc">${parseFormatting(desc)}</div>`:''}
               ${types.length?`<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`:''}
             </div>
             ${rep?`<div class="ip-repeat">${esc(rep)}</div>`:''}
-            <div class="ip-pts">${pts?`+${pts}`:''}</div>
+            <div class="ip-pts">${ptsDisplay}</div>
           </div>`;
         }).join('')}
       </div>
@@ -610,7 +665,6 @@ function renderIpTaskList() {
   }
   document.getElementById('ipTaskList').innerHTML=html;
 
-  // Attach click for detail
   document.querySelectorAll('#ipTaskList .ip-row').forEach(row=>{
     row.addEventListener('click',()=>{
       const tName=row.dataset.taskName;
@@ -631,7 +685,10 @@ function showIpTaskDetail(task) {
   const rep     = getField(task,'repeatability');
   const notes   = getField(task,'notes','Notes');
   const types   = getIpTypes(task);
-  const done    = player ? isTruthy(getField(player,name)) : false;
+
+  const earnedPts = player ? getTaskEarnedPoints(player, task) : 0;
+  const done = player ? (earnedPts >= maxPts) : false;
+  const started = player ? (earnedPts > 0 && earnedPts < maxPts) : false;
 
   document.getElementById('ipDetailName').textContent=name;
 
@@ -649,11 +706,18 @@ function showIpTaskDetail(task) {
   else notesWrap.style.display='none';
 
   const prog=document.getElementById('ipDetailProgress');
-  prog.innerHTML=player
-    ? `<strong style="color:${done?'var(--yellow)':'var(--text2)'}">${done?'✓ Completed':'○ Not completed'}</strong>`
-    : '<span style="color:var(--text3)">Select a player to see progress.</span>';
+  if (player) {
+    if (done) {
+      prog.innerHTML = `<strong style="color:var(--yellow)">✓ Completed (${earnedPts} / ${maxPts} pts)</strong>`;
+    } else if (started) {
+      prog.innerHTML = `<strong style="color:var(--purple2)">◐ In Progress (${earnedPts} / ${maxPts} pts)</strong>`;
+    } else {
+      prog.innerHTML = `<strong style="color:var(--text3)">○ Not Started (${earnedPts} / ${maxPts} pts)</strong>`;
+    }
+  } else {
+    prog.innerHTML = '<span style="color:var(--text3)">Select a player to see progress.</span>';
+  }
 
-  // On mobile, hide list and show detail; on desktop show side panel
   if(window.innerWidth>=900){
     document.getElementById('ipTaskDetail').style.display='';
   } else {
@@ -665,38 +729,36 @@ function showIpTaskDetail(task) {
 function closeInfluenceModal() {
   document.getElementById('ipModal').classList.remove('open');
   S.activeIpTask=null;
+  setBnavActive('map');
 }
 
-// ─── FEATURE 7: SEARCH MODAL ───
+// ─── SEARCH MODAL — MAGE CODEX ───
 function openSearchModal() {
   document.getElementById('searchModal').classList.add('open');
   setTimeout(()=>document.getElementById('searchInput').focus(),100);
 }
 function closeSearchModal() {
   document.getElementById('searchModal').classList.remove('open');
+  setBnavActive('map');
 }
 
 function buildSearchIndex() {
   const items=[];
 
-  // Ranks
   S.ranks.forEach(r=>{
     items.push({type:'rank',icon:'⬡',label:r.name,sub:r.description||r.lore||'',badge:'Rank',data:r});
   });
 
-  // Requirements
   S.reqRegistry.forEach(req=>{
     items.push({type:'req',icon:'📋',label:req.name,sub:req.description||'',badge:req.type||'Requirement',data:req});
   });
 
-  // Influence tasks
   S.influenceTasks.forEach(t=>{
     const name=getField(t,'name');
     if(!name) return;
     items.push({type:'task',icon:'🔮',label:name,sub:getField(t,'description','Description')||'',badge:`+${getField(t,'points','Points')||'?'} pts`,data:t});
   });
 
-  // Rewards (from ranks)
   S.ranks.forEach(r=>{
     r.rewards.forEach(rw=>{
       items.push({type:'reward',icon:'✦',label:rw.name,sub:rw.description||`Reward from ${r.name}`,badge:'Reward',data:{...rw,rankId:r.id,rankName:r.name}});
@@ -768,7 +830,6 @@ function handleSearchSelect(type, label) {
       if(window.innerWidth<900) openDrawer();
     }
   } else if(type==='req'){
-    // Find first rank containing this req
     const rank=S.ranks.find(r=>r.requirements.some(q=>q.name===label));
     if(rank){
       S.selectedRankId=rank.id;
@@ -780,7 +841,6 @@ function handleSearchSelect(type, label) {
     const task=S.influenceTasks.find(t=>getField(t,'name')===label);
     if(task){openInfluenceModal();setTimeout(()=>showIpTaskDetail(task),100);}
   } else if(type==='reward'){
-    // Find rank with this reward and open it
     const rank=S.ranks.find(r=>r.rewards.some(rw=>rw.name===label));
     if(rank){
       S.selectedRankId=rank.id;
@@ -794,10 +854,12 @@ function handleSearchSelect(type, label) {
 function openDrawer(){
   document.getElementById('detailPanel').classList.add('drawer-open');
   document.getElementById('drawerBackdrop').classList.add('visible');
+  setBnavActive('detail');
 }
 function closeDrawer(){
   document.getElementById('detailPanel').classList.remove('drawer-open');
   document.getElementById('drawerBackdrop').classList.remove('visible');
+  setBnavActive('map');
 }
 
 function initBottomNav() {
