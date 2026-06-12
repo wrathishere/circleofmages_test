@@ -503,7 +503,7 @@ function getIpTypes(task) {
   const t1=getField(task,'type1');
   const t2=getField(task,'type2');
   const t3=getField(task,'type3');
-  return [t1,t2,t3].filter(Boolean);
+  return [t1,t2,t3].map(t => String(t || '').trim()).filter(Boolean);
 }
 
 function getIpTaskStats(player) {
@@ -574,9 +574,20 @@ function openInfluenceModal() {
   const cats = [...new Set(S.influenceTasks.map(t=>getField(t,'category')).filter(Boolean))];
   catSel.innerHTML = `<option value="">All Categories</option>` + cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
 
+  // Populate Type filter dynamically from type1, type2, type3 columns
+  const typeSel = document.getElementById('ipFilterRepeat');
+  const typeSet = new Set();
+  S.influenceTasks.forEach(t => {
+    getIpTypes(t).forEach(type => {
+      if (type.trim()) typeSet.add(type.trim());
+    });
+  });
+  const dynamicTypes = [...typeSet].sort();
+  typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+
   renderIpTaskList();
 
-  // Desktop double column alignment
+  // Open detail task panel on desktop automatically
   if (window.innerWidth >= 900) {
     document.getElementById('ipTaskDetail').style.display = '';
     if (!S.activeIpTask && S.influenceTasks.length > 0) {
@@ -594,13 +605,12 @@ function renderIpTaskList() {
   const player = S.selectedPlayer;
   const catFilter    = document.getElementById('ipFilterCategory').value;
   const statusFilter = document.getElementById('ipFilterStatus').value;
-  const repeatFilter = document.getElementById('ipFilterRepeat').value;
+  const typeFilter   = document.getElementById('ipFilterRepeat').value;
   const search       = document.getElementById('ipFilterSearch').value.trim().toLowerCase();
 
   const filtered = S.influenceTasks.filter(t=>{
     const name   = getField(t,'name');
     const cat    = getField(t,'category');
-    const rep    = getField(t,'repeatability').toLowerCase();
     
     const earnedPts = player ? getTaskEarnedPoints(player, t) : 0;
     const maxPts = parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10);
@@ -609,8 +619,13 @@ function renderIpTaskList() {
     if(catFilter && cat !== catFilter) return false;
     if(statusFilter==='completed' && !done) return false;
     if(statusFilter==='incomplete' && done) return false;
-    if(repeatFilter==='repeatable' && !rep) return false;
-    if(repeatFilter==='once' && rep) return false;
+    
+    // Dynamic type filter check
+    if (typeFilter) {
+      const taskTypes = getIpTypes(t).map(x => x.toLowerCase());
+      if (!taskTypes.includes(typeFilter.toLowerCase())) return false;
+    }
+    
     if(search && !name.toLowerCase().includes(search) && !getField(t,'description','Description').toLowerCase().includes(search)) return false;
     return true;
   });
