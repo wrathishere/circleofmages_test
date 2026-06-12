@@ -916,4 +916,3 @@ async function init() {
 let rafResize;
 window.addEventListener('resize',()=>{cancelAnimationFrame(rafResize);rafResize=requestAnimationFrame(()=>drawPaths());});
 document.addEventListener('DOMContentLoaded',init);
---- END OF FILE main.js ---
