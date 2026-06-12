@@ -16,6 +16,16 @@
       <div class="logo-icon">✦</div>
       <span class="logo-text">The Circle of Mages</span>
     </div>
+    <div class="topbar-actions">
+      <button class="topbar-btn" id="searchBtn" aria-label="Open Mage Codex search">
+        <span class="topbar-btn-icon">🔍</span>
+        <span class="topbar-btn-label">Codex Search</span>
+      </button>
+      <button class="topbar-btn" id="influenceNavBtn" aria-label="Open Influence Tracker">
+        <span class="topbar-btn-icon">🔮</span>
+        <span class="topbar-btn-label">Influence</span>
+      </button>
+    </div>
   </header>
 
   <!-- MAIN — map canvas takes full width -->
@@ -95,11 +105,18 @@
           <div class="detail-section-title">REQUIREMENTS</div>
           <div class="req-list" id="detailReqs"></div>
 
-          <!-- Requirement detail -->
+          <!-- Requirement detail card with tabs -->
           <div class="requirement-detail-card" id="reqDetailCard" style="display:none">
             <div class="requirement-detail-name" id="requirementDetailName"></div>
             <div class="requirement-detail-type" id="requirementDetailType"></div>
             <div class="requirement-detail-description" id="requirementDetailDescription"></div>
+            <!-- Tab nav for instruction/rules/lore -->
+            <div class="req-tabs" id="reqTabs" style="display:none">
+              <button class="req-tab active" data-tab="instruction">Instructions</button>
+              <button class="req-tab" data-tab="rules">Rules</button>
+              <button class="req-tab" data-tab="lore">Lore</button>
+            </div>
+            <div class="req-tab-content" id="reqTabContent"></div>
           </div>
 
           <!-- Rewards -->
@@ -117,18 +134,121 @@
   <!-- DRAWER BACKDROP (mobile) -->
   <div class="drawer-backdrop" id="drawerBackdrop"></div>
 
-  <!-- INFLUENCE MODAL -->
+  <!-- ══════════════════════════════════════════
+       INFLUENCE MODAL (expanded dashboard)
+  ══════════════════════════════════════════ -->
   <div class="ip-modal-overlay" id="ipModal">
     <div class="ip-modal">
       <div class="ip-modal-header">
         <div class="ip-modal-title">
           <span class="ip-modal-icon">🔮</span>
-          <span>Influence Point Tasks</span>
+          <span>Influence Tracker</span>
         </div>
         <div class="ip-modal-sub" id="ipModalInfluence">0 pts earned</div>
         <button class="ip-modal-close" id="ipModalClose" aria-label="Close">✕</button>
       </div>
-      <div class="ip-task-list" id="ipTaskList"></div>
+
+      <div class="ip-modal-body">
+
+        <!-- SECTION 1: Overview -->
+        <div class="ip-overview" id="ipOverview">
+          <div class="ip-stat">
+            <div class="ip-stat-val" id="ipStatEarned">0</div>
+            <div class="ip-stat-lbl">Earned</div>
+          </div>
+          <div class="ip-stat">
+            <div class="ip-stat-val ip-stat-max" id="ipStatMax">0</div>
+            <div class="ip-stat-lbl">Maximum</div>
+          </div>
+          <div class="ip-stat">
+            <div class="ip-stat-val ip-stat-rem" id="ipStatRemaining">0</div>
+            <div class="ip-stat-lbl">Remaining</div>
+          </div>
+          <div class="ip-stat">
+            <div class="ip-stat-val ip-stat-pct" id="ipStatPct">0%</div>
+            <div class="ip-stat-lbl">Completion</div>
+          </div>
+        </div>
+
+        <!-- SECTION 2: Achievement Tracks -->
+        <div class="ip-tracks-section" id="ipTracksSection">
+          <div class="ip-section-title">Achievement Tracks</div>
+          <div class="ip-tracks" id="ipTracks"></div>
+        </div>
+
+        <!-- SECTION 3: Filters -->
+        <div class="ip-filters" id="ipFilters">
+          <div class="ip-filter-group">
+            <label class="ip-filter-label">Category</label>
+            <select class="ip-filter-select" id="ipFilterCategory">
+              <option value="">All Categories</option>
+            </select>
+          </div>
+          <div class="ip-filter-group">
+            <label class="ip-filter-label">Status</label>
+            <select class="ip-filter-select" id="ipFilterStatus">
+              <option value="">All</option>
+              <option value="completed">Completed</option>
+              <option value="incomplete">Incomplete</option>
+            </select>
+          </div>
+          <div class="ip-filter-group">
+            <label class="ip-filter-label">Type</label>
+            <select class="ip-filter-select" id="ipFilterRepeat">
+              <option value="">All Types</option>
+              <option value="repeatable">Repeatable</option>
+              <option value="once">One-Time</option>
+            </select>
+          </div>
+          <div class="ip-filter-group">
+            <label class="ip-filter-label">Search</label>
+            <input class="ip-filter-input" id="ipFilterSearch" type="text" placeholder="Search tasks…">
+          </div>
+        </div>
+
+        <!-- SECTION 4+5: Task Browser + Detail -->
+        <div class="ip-content-area">
+          <div class="ip-task-list" id="ipTaskList"></div>
+          <div class="ip-task-detail" id="ipTaskDetail" style="display:none">
+            <button class="ip-detail-back" id="ipDetailBack">← Back</button>
+            <div class="ip-detail-name" id="ipDetailName"></div>
+            <div class="ip-detail-meta" id="ipDetailMeta"></div>
+            <div class="ip-detail-desc" id="ipDetailDesc"></div>
+            <div class="ip-detail-notes-wrap" id="ipDetailNotesWrap" style="display:none">
+              <div class="ip-detail-notes-lbl">Notes</div>
+              <div class="ip-detail-notes" id="ipDetailNotes"></div>
+            </div>
+            <div class="ip-detail-progress" id="ipDetailProgress"></div>
+          </div>
+        </div>
+
+      </div><!-- /ip-modal-body -->
+    </div><!-- /ip-modal -->
+  </div><!-- /ip-modal-overlay -->
+
+  <!-- ══════════════════════════════════════════
+       SEARCH MODAL — Mage Codex
+  ══════════════════════════════════════════ -->
+  <div class="search-modal-overlay" id="searchModal">
+    <div class="search-modal">
+      <div class="search-modal-header">
+        <div class="search-modal-title">
+          <span class="search-modal-icon">📖</span>
+          <span>Mage Codex</span>
+        </div>
+        <button class="search-modal-close" id="searchModalClose" aria-label="Close">✕</button>
+      </div>
+      <div class="search-input-wrap">
+        <span class="search-input-icon">🔍</span>
+        <input class="search-input" id="searchInput" type="text" placeholder="Search ranks, requirements, tasks, rewards, lore…" autocomplete="off">
+        <button class="search-clear" id="searchClear" style="display:none">✕</button>
+      </div>
+      <div class="search-results" id="searchResults">
+        <div class="search-empty">
+          <div class="search-empty-icon">✦</div>
+          <div class="search-empty-text">Begin typing to search the Codex</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -136,6 +256,8 @@
   <nav class="bottom-nav">
     <button class="bnav-btn active" data-view="map"><span class="bnav-icon">🗺️</span>Map</button>
     <button class="bnav-btn" data-view="detail"><span class="bnav-icon">📜</span>Details</button>
+    <button class="bnav-btn" data-view="search"><span class="bnav-icon">🔍</span>Codex</button>
+    <button class="bnav-btn" data-view="influence"><span class="bnav-icon">🔮</span>Influence</button>
   </nav>
 
 </div>
