@@ -1,4 +1,4 @@
-// ─── CONFIG ───
+// ─── CONFIG ─── //
 const SHEET_ID = '1FFEg75S6-HKlN58pMROvtTkBry1FYGrVruPsUbaf4qA';
 const SHEET_NAMES = { 
   ranks: 'ranks', 
