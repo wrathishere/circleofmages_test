@@ -437,10 +437,34 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 /* ══════════════════════════════════════════
    SECTION BANNER (homepage overlay)
 ══════════════════════════════════════════ */
-.section-banner{position:absolute;top:calc(var(--topbar-h) + 8px);left:50%;transform:translateX(-50%);z-index:50;width:min(560px,90vw);background:rgba(10,6,8,.82);border:1px solid var(--border2);border-radius:10px;padding:10px 16px;backdrop-filter:blur(8px);display:flex;flex-direction:column;gap:6px;pointer-events:none}
-.section-banner-desc{font-family:var(--font-display);font-size:13px;color:var(--text2);text-align:center;line-height:1.5}
-.section-banner-announcement{display:flex;align-items:flex-start;gap:7px;background:rgba(155,109,255,.12);border:1px solid rgba(155,109,255,.28);border-radius:7px;padding:7px 10px;font-size:12px;color:var(--purple2);line-height:1.45}
-.section-banner-ann-icon{flex-shrink:0;font-size:14px}
+.topbar{ flex-wrap: wrap; }
+
+.topbar-section-info{
+  width: 100%;
+  padding: 6px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-top: 1px solid var(--border);
+}
+.topbar-section-desc{
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--text2);
+  text-align: center;
+}
+.topbar-section-announcement{
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  background: rgba(155,109,255,.12);
+  border: 1px solid rgba(155,109,255,.28);
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--purple2);
+  line-height: 1.45;
+}
 
 /* ══════════════════════════════════════════
    SECTION INFO (inside modals)
