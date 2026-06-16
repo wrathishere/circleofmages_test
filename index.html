@@ -25,6 +25,10 @@
         <span class="topbar-btn-icon">🔮</span>
         <span class="topbar-btn-label">Influence</span>
       </button>
+      <button class="topbar-btn" id="arcaneNavBtn" aria-label="Open Arcane Mastery">
+        <span class="topbar-btn-icon">🌀</span>
+        <span class="topbar-btn-label">Arcane Mastery</span>
+      </button>
     </div>
   </header>
 
@@ -37,6 +41,15 @@
       <div class="map-bg-overlay"></div>
       <div class="arcane-circle"></div>
       <svg class="map-svg" id="pathSvg"></svg>
+
+      <!-- ── HOMEPAGE SECTION BANNER ── -->
+      <div class="section-banner" id="homeBanner" style="display:none">
+        <div class="section-banner-desc" id="homeBannerDesc"></div>
+        <div class="section-banner-announcement" id="homeBannerAnnouncement" style="display:none">
+          <span class="section-banner-ann-icon">📢</span>
+          <span id="homeBannerAnnouncementText"></span>
+        </div>
+      </div>
 
       <!-- ── FLOATING STATUS BAR (top center) ── -->
       <div class="status-bar" id="statusBar">
@@ -148,6 +161,15 @@
         <button class="ip-modal-close" id="ipModalClose" aria-label="Close">✕</button>
       </div>
 
+      <!-- Section description + announcement -->
+      <div class="am-section-info" id="ipSectionInfo" style="display:none">
+        <div class="am-section-desc" id="ipSectionDesc"></div>
+        <div class="am-section-announcement" id="ipSectionAnnouncement" style="display:none">
+          <span class="section-banner-ann-icon">📢</span>
+          <span id="ipSectionAnnouncementText"></span>
+        </div>
+      </div>
+
       <div class="ip-modal-body">
 
         <!-- SECTION 1: Overview -->
@@ -227,6 +249,91 @@
   </div><!-- /ip-modal-overlay -->
 
   <!-- ══════════════════════════════════════════
+       ARCANE MASTERY MODAL
+  ══════════════════════════════════════════ -->
+  <div class="am-modal-overlay" id="amModal">
+    <div class="am-modal">
+      <div class="am-modal-header">
+        <div class="am-modal-title">
+          <span class="am-modal-icon">🌀</span>
+          <span>Arcane Mastery</span>
+        </div>
+        <div class="am-modal-sub" id="amModalProgress">0 / 0 Mastered</div>
+        <button class="am-modal-close" id="amModalClose" aria-label="Close">✕</button>
+      </div>
+
+      <!-- Section description + announcement -->
+      <div class="am-section-info" id="amSectionInfo" style="display:none">
+        <div class="am-section-desc" id="amSectionDesc"></div>
+        <div class="am-section-announcement" id="amSectionAnnouncement" style="display:none">
+          <span class="section-banner-ann-icon">📢</span>
+          <span id="amSectionAnnouncementText"></span>
+        </div>
+      </div>
+
+      <div class="am-modal-body">
+
+        <!-- Overview -->
+        <div class="am-overview" id="amOverview">
+          <div class="am-stat">
+            <div class="am-stat-val" id="amStatDone">0</div>
+            <div class="am-stat-lbl">Mastered</div>
+          </div>
+          <div class="am-stat">
+            <div class="am-stat-val am-stat-total" id="amStatTotal">0</div>
+            <div class="am-stat-lbl">Total</div>
+          </div>
+          <div class="am-stat">
+            <div class="am-stat-val am-stat-rem" id="amStatRemaining">0</div>
+            <div class="am-stat-lbl">Remaining</div>
+          </div>
+          <div class="am-stat">
+            <div class="am-stat-val am-stat-pct" id="amStatPct">0%</div>
+            <div class="am-stat-lbl">Completion</div>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="am-filters">
+          <div class="ip-filter-group">
+            <label class="ip-filter-label">Status</label>
+            <select class="ip-filter-select" id="amFilterStatus">
+              <option value="">All</option>
+              <option value="mastered">Mastered</option>
+              <option value="unmastered">Not Yet</option>
+            </select>
+          </div>
+          <div class="ip-filter-group">
+            <label class="ip-filter-label">Search</label>
+            <input class="ip-filter-input" id="amFilterSearch" type="text" placeholder="Search mancies…">
+          </div>
+        </div>
+
+        <!-- Quest list -->
+        <div class="am-content-area">
+          <div class="am-quest-list" id="amQuestList"></div>
+
+          <!-- Quest detail -->
+          <div class="am-quest-detail" id="amQuestDetail" style="display:none">
+            <button class="ip-detail-back" id="amDetailBack">← Back</button>
+            <div class="am-detail-name" id="amDetailName"></div>
+            <div class="am-detail-status" id="amDetailStatus"></div>
+            <div class="am-detail-tabs">
+              <button class="am-tab active" data-tab="brief">Brief</button>
+              <button class="am-tab" data-tab="lore">Lore</button>
+              <button class="am-tab" data-tab="rule">Rules</button>
+              <button class="am-tab" data-tab="submission">Submission</button>
+              <button class="am-tab" data-tab="note">Notes</button>
+            </div>
+            <div class="am-tab-content" id="amTabContent"></div>
+          </div>
+        </div>
+
+      </div><!-- /am-modal-body -->
+    </div><!-- /am-modal -->
+  </div><!-- /am-modal-overlay -->
+
+  <!-- ══════════════════════════════════════════
        SEARCH MODAL — Mage Codex
   ══════════════════════════════════════════ -->
   <div class="search-modal-overlay" id="searchModal">
@@ -238,6 +345,15 @@
         </div>
         <button class="search-modal-close" id="searchModalClose" aria-label="Close">✕</button>
       </div>
+      <!-- Section description + announcement -->
+      <div class="am-section-info" id="codexSectionInfo" style="display:none">
+        <div class="am-section-desc" id="codexSectionDesc"></div>
+        <div class="am-section-announcement" id="codexSectionAnnouncement" style="display:none">
+          <span class="section-banner-ann-icon">📢</span>
+          <span id="codexSectionAnnouncementText"></span>
+        </div>
+      </div>
+
       <div class="search-input-wrap">
         <span class="search-input-icon">🔍</span>
         <input class="search-input" id="searchInput" type="text" placeholder="Search ranks, requirements, tasks, rewards, lore…" autocomplete="off">
@@ -258,6 +374,7 @@
     <button class="bnav-btn" data-view="detail"><span class="bnav-icon">📜</span>Details</button>
     <button class="bnav-btn" data-view="search"><span class="bnav-icon">🔍</span>Codex</button>
     <button class="bnav-btn" data-view="influence"><span class="bnav-icon">🔮</span>Influence</button>
+    <button class="bnav-btn" data-view="arcane"><span class="bnav-icon">🌀</span>Arcane</button>
   </nav>
 
 </div>
