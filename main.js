@@ -6,7 +6,9 @@ const SHEET_NAMES = {
   influenceTasks: 'influence points', 
   tracker: 'tracker', 
   layout: 'nodelayout',
-  influenceStat: 'influence stat'
+  influenceStat: 'influence stat',
+  arcaneMastery: 'arcane_mastery',
+  sections: 'sections'
 };
 const RANK_ICON_PATH   = 'images/ranks/';
 const REWARD_ICON_PATH = 'images/rewards/';
@@ -43,7 +45,10 @@ let S = {
   selectedPlayer:null, selectedRankId:null, selectedReqName:null,
   selectedReqData:null, activeReqTab:'instruction',
   activeIpTask:null,
-  influenceStat: []
+  influenceStat:[],
+  arcaneMastery:[],
+  sections:new Map(),
+  activeAmTab:'brief', activeAmQuest:null
 };
 
 // ─── UTILS ───
@@ -123,15 +128,17 @@ async function loadSheet(name, fallback=[], optional=false) {
 }
 
 async function loadAll() {
-  const [ranks,reqs,influenceTasks,tracker,nodelayout,influenceStat] = await Promise.all([
+  const [ranks,reqs,influenceTasks,tracker,nodelayout,influenceStat,arcaneMastery,sections] = await Promise.all([
     loadSheet(SHEET_NAMES.ranks,         FALLBACK.ranks),
     loadSheet(SHEET_NAMES.reqs,          FALLBACK.reqs, true),
     loadSheet(SHEET_NAMES.influenceTasks,FALLBACK.influenceTasks, true),
     loadSheet(SHEET_NAMES.tracker,       FALLBACK.tracker),
     loadSheet(SHEET_NAMES.layout,        FALLBACK.nodelayout),
-    loadSheet(SHEET_NAMES.influenceStat, [], true)
+    loadSheet(SHEET_NAMES.influenceStat, [], true),
+    loadSheet(SHEET_NAMES.arcaneMastery, [], true),
+    loadSheet(SHEET_NAMES.sections,      [], true)
   ]);
-  return {ranks,reqs,influenceTasks,tracker,nodelayout,influenceStat};
+  return {ranks,reqs,influenceTasks,tracker,nodelayout,influenceStat,arcaneMastery,sections};
 }
 
 // ─── PARSERS ───
@@ -163,6 +170,8 @@ function parseRank(row, index) {
   });
   const ipVal=parseInt(getField(row,'influence points','influence'),10);
   if(ipVal>0) reqs.push({name:`${ipVal} Influence Points`,description:`Earn at least ${ipVal} influence points.`,type:'Influence',isInfluence:true,threshold:ipVal,_order:999});
+  const amVal=parseInt(getField(row,'arcane_mastery','arcane mastery'),10);
+  if(amVal>0) reqs.push({name:`${amVal} Arcane Mastery`,description:`Complete any ${amVal} Arcane Mastery quests.`,type:'Arcane Mastery',isArcaneMastery:true,threshold:amVal,_order:998});
   reqs.sort((a,b)=>a._order-b._order);
 
   const rewards = [];
@@ -208,12 +217,58 @@ function parseLayoutAndConnections(rows) {
   return {layout,connections};
 }
 
+function buildSectionsMap(rows) {
+  const map = new Map();
+  rows.forEach(row => {
+    const section = normKey(getField(row, 'section'));
+    if (!section) return;
+    map.set(section, {
+      description:  getField(row, 'description'),
+      announcement: getField(row, 'announcement'),
+      active:       isTruthy(getField(row, 'announcement toggle', 'announcement_toggle', 'anouncement toogle'))
+    });
+  });
+  return map;
+}
+
+function getSection(key) {
+  return S.sections.get(normKey(key)) || {description:'', announcement:'', active:false};
+}
+
+function renderSectionInfo(descId, annId, annTextId, wrapId, sectionKey) {
+  const s = getSection(sectionKey);
+  const wrap = document.getElementById(wrapId);
+  const descEl = document.getElementById(descId);
+  const annEl = document.getElementById(annId);
+  const annTextEl = document.getElementById(annTextId);
+  if (!wrap) return;
+  const hasDesc = !!s.description;
+  const hasAnn = s.active && !!s.announcement;
+  wrap.style.display = (hasDesc || hasAnn) ? '' : 'none';
+  if (descEl) { descEl.textContent = s.description; descEl.style.display = hasDesc ? '' : 'none'; }
+  if (annEl) annEl.style.display = hasAnn ? '' : 'none';
+  if (annTextEl) annTextEl.textContent = s.announcement;
+}
+
+// ─── ARCANE MASTERY HELPERS ───
+function getAmDoneCount(player) {
+  if (!player) return 0;
+  return S.arcaneMastery.filter(q => isTruthy(getField(player, getField(q, 'name')))).length;
+}
+
+function amQuestDone(player, quest) {
+  if (!player) return false;
+  return isTruthy(getField(player, getField(quest, 'name')));
+}
+
 function applyData(data) {
   S.reqRegistry    = buildReqRegistry(data.reqs);
   S.influenceTasks = data.influenceTasks;
   S.ranks          = data.ranks.map((r,i)=>parseRank(r,i)).filter(r=>r.name);
   S.players        = data.tracker;
   S.influenceStat  = data.influenceStat || [];
+  S.arcaneMastery  = data.arcaneMastery || [];
+  S.sections       = buildSectionsMap(data.sections || []);
   const {layout,connections} = parseLayoutAndConnections(data.nodelayout);
   S.layout      = layout;
   S.connections = connections.length ? connections : S.ranks.slice(1).map((r,i)=>({from:S.ranks[i].id,to:r.id}));
@@ -258,6 +313,7 @@ function getRankName(row) {
 function reqDone(player, req) {
   if(!player) return false;
   if(req.isInfluence) return getInfluence(player)>=req.threshold;
+  if(req.isArcaneMastery) return getAmDoneCount(player)>=req.threshold;
   return isTruthy(getField(player,req.name));
 }
 
@@ -399,9 +455,12 @@ function drawPaths(prog=getProgress(S.selectedPlayer)) {
 function renderReqRow(req, player, index) {
   const done=reqDone(player,req);
   const sel=S.selectedReqName===req.name;
+  let badge = '';
+  if(req.isInfluence) badge = ` <span class="ip-badge">🔮 ${getInfluence(player)} / ${req.threshold}</span>`;
+  if(req.isArcaneMastery) badge = ` <span class="ip-badge am-badge">🌀 ${getAmDoneCount(player)} / ${req.threshold}</span>`;
   return `<button type="button" class="req-row req-button ${done?'done':'pending'}${sel?' selected':''}" data-req-index="${index}">
     <div class="req-circle">${done?'✓':'○'}</div>
-    <div class="req-name">${esc(req.name)}${req.isInfluence?` <span class="ip-badge">🔮 ${getInfluence(player)} / ${req.threshold}</span>`:''}</div>
+    <div class="req-name">${esc(req.name)}${badge}</div>
   </button>`;
 }
 
@@ -449,6 +508,7 @@ function selectNode(id) {
       const req=rank.requirements[idx];
       if(!req) return;
       if(req.isInfluence){openInfluenceModal();return;}
+      if(req.isArcaneMastery){openAmModal();return;}
       S.selectedReqName=req.name;
       S.selectedReqData=req;
       S.activeReqTab='instruction';
@@ -585,6 +645,7 @@ function openInfluenceModal() {
   const dynamicTypes = [...typeSet].sort();
   typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
 
+  renderSectionInfo('ipSectionDesc','ipSectionAnnouncement','ipSectionAnnouncementText','ipSectionInfo','influence_modal');
   renderIpTaskList();
 
   // Hide detail task sidebar permanently and let the list take full width
@@ -680,8 +741,120 @@ function closeInfluenceModal() {
   setBnavActive('map');
 }
 
+// ─── ARCANE MASTERY MODAL ───
+function openAmModal() {
+  const player = S.selectedPlayer;
+  const total = S.arcaneMastery.length;
+  const done = getAmDoneCount(player);
+
+  document.getElementById('amStatDone').textContent      = done;
+  document.getElementById('amStatTotal').textContent     = total;
+  document.getElementById('amStatRemaining').textContent = Math.max(0, total - done);
+  document.getElementById('amStatPct').textContent       = total ? `${Math.round(done/total*100)}%` : '0%';
+  document.getElementById('amModalProgress').textContent = `${done} / ${total} Mastered`;
+
+  renderSectionInfo('amSectionDesc','amSectionAnnouncement','amSectionAnnouncementText','amSectionInfo','arcane_mastery_modal');
+
+  // Reset detail view
+  S.activeAmQuest = null;
+  document.getElementById('amQuestDetail').style.display = 'none';
+  document.getElementById('amQuestList').style.display   = '';
+
+  renderAmQuestList();
+  document.getElementById('amModal').classList.add('open');
+}
+
+function renderAmQuestList() {
+  const player      = S.selectedPlayer;
+  const statusFilter = document.getElementById('amFilterStatus').value;
+  const search       = document.getElementById('amFilterSearch').value.trim().toLowerCase();
+
+  const filtered = S.arcaneMastery.filter(q => {
+    const name = getField(q, 'name');
+    const done = amQuestDone(player, q);
+    if (statusFilter === 'mastered'   && !done) return false;
+    if (statusFilter === 'unmastered' && done)  return false;
+    if (search && !name.toLowerCase().includes(search) &&
+        !getField(q,'brief').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    document.getElementById('amQuestList').innerHTML = `<div style="color:var(--text3);padding:24px;text-align:center;font-style:italic;">No quests found.</div>`;
+    return;
+  }
+
+  document.getElementById('amQuestList').innerHTML = filtered.map(q => {
+    const name   = getField(q, 'name');
+    const brief  = getField(q, 'brief');
+    const done   = amQuestDone(player, q);
+    const statusClass = done ? ' am-done' : '';
+    const checkSymbol = done ? '✓' : '○';
+    return `<div class="am-quest-row${statusClass}" data-quest-name="${esc(name)}">
+      <div class="am-quest-check">${checkSymbol}</div>
+      <div class="am-quest-info">
+        <div class="am-quest-name">${esc(name)}</div>
+        ${brief ? `<div class="am-quest-brief">${esc(brief)}</div>` : ''}
+      </div>
+      <div class="am-quest-arrow">›</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('amQuestList').querySelectorAll('.am-quest-row').forEach(el => {
+    el.addEventListener('click', () => {
+      const questName = el.dataset.questName;
+      const quest = S.arcaneMastery.find(q => getField(q,'name') === questName);
+      if (quest) openAmQuestDetail(quest);
+    });
+  });
+}
+
+function openAmQuestDetail(quest) {
+  S.activeAmQuest = quest;
+  S.activeAmTab   = 'brief';
+  const player = S.selectedPlayer;
+  const done   = amQuestDone(player, quest);
+  const name   = getField(quest, 'name');
+
+  document.getElementById('amQuestList').style.display   = 'none';
+  document.getElementById('amQuestDetail').style.display = '';
+  document.getElementById('amDetailName').textContent    = name;
+  document.getElementById('amDetailStatus').textContent  = done ? '✓ Mastered' : '○ Not Yet Mastered';
+  document.getElementById('amDetailStatus').className    = 'am-detail-status ' + (done ? 'am-detail-done' : 'am-detail-pending');
+
+  // Activate first tab with content
+  const tabs = ['brief','lore','rule','submission','note'];
+  const firstWithContent = tabs.find(t => !!getField(quest, t)) || 'brief';
+  S.activeAmTab = firstWithContent;
+
+  document.querySelectorAll('.am-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === S.activeAmTab);
+    btn.onclick = () => {
+      S.activeAmTab = btn.dataset.tab;
+      document.querySelectorAll('.am-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === S.activeAmTab));
+      renderAmTab(quest, S.activeAmTab);
+    };
+  });
+
+  renderAmTab(quest, S.activeAmTab);
+}
+
+function renderAmTab(quest, tab) {
+  const val = getField(quest, tab);
+  document.getElementById('amTabContent').innerHTML = val
+    ? parseFormatting(val)
+    : '<span style="color:var(--text3);font-style:italic">No content available.</span>';
+}
+
+function closeAmModal() {
+  document.getElementById('amModal').classList.remove('open');
+  S.activeAmQuest = null;
+  setBnavActive('map');
+}
+
 // ─── SEARCH MODAL — MAGE CODEX ───
 function openSearchModal() {
+  renderSectionInfo('codexSectionDesc','codexSectionAnnouncement','codexSectionAnnouncementText','codexSectionInfo','codex_modal');
   document.getElementById('searchModal').classList.add('open');
   setTimeout(()=>document.getElementById('searchInput').focus(),100);
 }
@@ -830,6 +1003,7 @@ function initBottomNav() {
       else if(btn.dataset.view==='detail') openDrawer();
       else if(btn.dataset.view==='search') openSearchModal();
       else if(btn.dataset.view==='influence') openInfluenceModal();
+      else if(btn.dataset.view==='arcane') openAmModal();
     });
   });
 }
@@ -840,6 +1014,7 @@ function renderApp() {
   renderSelector();
   renderStatusBar(prog);
   renderNodes(prog);
+  renderSectionInfo('homeBannerDesc','homeBannerAnnouncement','homeBannerAnnouncementText','homeBanner','homepage');
   requestAnimationFrame(()=>requestAnimationFrame(()=>{
     drawPaths(prog);
     if(S.selectedRankId) selectNode(S.selectedRankId);
@@ -888,6 +1063,18 @@ async function init() {
   // Topbar buttons
   document.getElementById('searchBtn').addEventListener('click',openSearchModal);
   document.getElementById('influenceNavBtn').addEventListener('click',openInfluenceModal);
+  document.getElementById('arcaneNavBtn').addEventListener('click',openAmModal);
+
+  // Arcane Mastery modal
+  document.getElementById('amModalClose').addEventListener('click',closeAmModal);
+  document.getElementById('amModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeAmModal();});
+  document.getElementById('amDetailBack').addEventListener('click',()=>{
+    S.activeAmQuest=null;
+    document.getElementById('amQuestDetail').style.display='none';
+    document.getElementById('amQuestList').style.display='';
+  });
+  document.getElementById('amFilterStatus').addEventListener('change',renderAmQuestList);
+  document.getElementById('amFilterSearch').addEventListener('input',renderAmQuestList);
 
   // Search modal
   document.getElementById('searchModalClose').addEventListener('click',closeSearchModal);
@@ -905,7 +1092,7 @@ async function init() {
   // Keyboard shortcut: Cmd/Ctrl+K for search
   document.addEventListener('keydown',e=>{
     if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openSearchModal();}
-    if(e.key==='Escape'){closeSearchModal();closeInfluenceModal();}
+    if(e.key==='Escape'){closeSearchModal();closeInfluenceModal();closeAmModal();}
   });
 
   initBottomNav();
