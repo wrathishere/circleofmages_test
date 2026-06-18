@@ -16,6 +16,13 @@
       <div class="logo-icon">✦</div>
       <span class="logo-text">The Circle of Mages</span>
     </div>
+    <div class="topbar-section-info" id="homeBanner" style="display:none">
+      <div class="topbar-section-desc" id="homeBannerDesc"></div>
+      <div class="topbar-section-announcement" id="homeBannerAnnouncement" style="display:none">
+        <span class="section-banner-ann-icon">📢</span>
+        <span id="homeBannerAnnouncementText"></span>
+      </div>
+    </div>
     <div class="topbar-actions">
       <button class="topbar-btn" id="searchBtn" aria-label="Open Mage Codex search">
         <span class="topbar-btn-icon">🔍</span>
@@ -30,13 +37,6 @@
         <span class="topbar-btn-label">Arcane Mastery</span>
       </button>
     </div>
-    <div class="topbar-section-info" id="homeBanner" style="display:none">
-      <div class="topbar-section-desc" id="homeBannerDesc"></div>
-      <div class="topbar-section-announcement" id="homeBannerAnnouncement" style="display:none">
-        <span class="section-banner-ann-icon">📢</span>
-        <span id="homeBannerAnnouncementText"></span>
-      </div>
-    </div>
   </header>
 
   <!-- MAIN — map canvas takes full width -->
@@ -48,15 +48,6 @@
       <div class="map-bg-overlay"></div>
       <div class="arcane-circle"></div>
       <svg class="map-svg" id="pathSvg"></svg>
-
-      <!-- ── HOMEPAGE SECTION BANNER ── -->
-      <div class="section-banner" id="homeBanner" style="display:none">
-        <div class="section-banner-desc" id="homeBannerDesc"></div>
-        <div class="section-banner-announcement" id="homeBannerAnnouncement" style="display:none">
-          <span class="section-banner-ann-icon">📢</span>
-          <span id="homeBannerAnnouncementText"></span>
-        </div>
-      </div>
 
       <!-- ── FLOATING STATUS BAR (top center) ── -->
       <div class="status-bar" id="statusBar">
