@@ -442,7 +442,7 @@ function drawPaths(prog=getProgress(S.selectedPlayer)) {
     if(f?.status==='neutral'||t?.status==='neutral')      return 'neutral';
     return 'locked';
   }
-  const colors={completed:'#bf9553',available:'#66369d',locked:'#4a3a60',neutral:'#4a3a60'};
+  const colors={completed:'#caa157',available:'#8456c4',locked:'#3a3344',neutral:'#3a3344'};
   svg.innerHTML=S.connections.map(conn=>{
     const a=center(conn.from),b=center(conn.to);
     if(!a||!b) return '';
