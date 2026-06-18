@@ -1,4 +1,4 @@
-// ─── CONFIG ─── //
+// ─── CONFIG ───
 const SHEET_ID = '1FFEg75S6-HKlN58pMROvtTkBry1FYGrVruPsUbaf4qA';
 const SHEET_NAMES = { 
   ranks: 'ranks', 
@@ -442,7 +442,7 @@ function drawPaths(prog=getProgress(S.selectedPlayer)) {
     if(f?.status==='neutral'||t?.status==='neutral')      return 'neutral';
     return 'locked';
   }
-  const colors={completed:'#f0c060',available:'#9b6dff',locked:'#4a3a60',neutral:'#4a3a60'};
+  const colors={completed:'#bf9553',available:'#66369d',locked:'#4a3a60',neutral:'#4a3a60'};
   svg.innerHTML=S.connections.map(conn=>{
     const a=center(conn.from),b=center(conn.to);
     if(!a||!b) return '';
