@@ -207,7 +207,14 @@ function parseLayoutAndConnections(rows) {
     const name=getField(row,'name','rank')||Object.values(row)[0]||'';
     if(!name) return;
     const id=slugify(name);
-    layout.set(id,{x:parseCoord(getField(row,'x')),y:parseCoord(getField(row,'y')),icon:getField(row,'icon')||`${id}.png`});
+    const hasPx=getField(row,'px')!=='' && getField(row,'py')!=='';
+    layout.set(id,{
+      x:parseCoord(getField(row,'x')),
+      y:parseCoord(getField(row,'y')),
+      px:hasPx?parseCoord(getField(row,'px')):null,
+      py:hasPx?parseCoord(getField(row,'py')):null,
+      icon:getField(row,'icon')||`${id}.png`
+    });
     Object.keys(row).forEach(key=>{
       if(!/^conn\d+$/i.test(normKey(key))) return;
       const target=row[key].trim();
@@ -392,19 +399,24 @@ function renderSelector() {
 }
 
 // ─── RENDER NODES ───
+function isMobileView(){ return window.innerWidth < 900; }
+
 const statusLabel = s => s==='completed'?'Completed':s==='available'?'Available':s==='neutral'?'View Info':'Locked';
 
 function renderNodes(prog) {
   const canvas = document.getElementById('mapCanvas');
   canvas.querySelectorAll('.node').forEach(n=>n.remove());
+  const mobile = isMobileView();
   prog.ranks.forEach(rank=>{
-    const layout=S.layout.get(rank.id)||{x:50,y:50};
+    const layout=S.layout.get(rank.id)||{x:50,y:50,px:null,py:null};
+    const left = (mobile && layout.px!=null) ? layout.px : layout.x;
+    const top  = (mobile && layout.py!=null) ? layout.py : layout.y;
     const node=document.createElement('button');
     node.type='button';
     node.className=`node node-${rank.status}${rank.status==='available'?' pulse':''}`;
     node.id=`node-${rank.id}`;
-    node.style.left=`${layout.x}%`;
-    node.style.top=`${layout.y}%`;
+    node.style.left=`${left}%`;
+    node.style.top=`${top}%`;
     node.dataset.rankId=rank.id;
     node.innerHTML=`
       <div class="node-header">
@@ -1101,5 +1113,16 @@ async function init() {
 }
 
 let rafResize;
-window.addEventListener('resize',()=>{cancelAnimationFrame(rafResize);rafResize=requestAnimationFrame(()=>drawPaths());});
+let lastMobileState = isMobileView();
+window.addEventListener('resize',()=>{
+  cancelAnimationFrame(rafResize);
+  rafResize=requestAnimationFrame(()=>{
+    const nowMobile = isMobileView();
+    if(nowMobile !== lastMobileState){
+      lastMobileState = nowMobile;
+      renderNodes(getProgress(S.selectedPlayer));
+    }
+    drawPaths();
+  });
+});
 document.addEventListener('DOMContentLoaded',init);
