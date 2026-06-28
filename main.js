@@ -8,7 +8,9 @@ const SHEET_NAMES = {
   layout: 'nodelayout',
   influenceStat: 'influence stat',
   arcaneMastery: 'arcane_mastery',
-  sections: 'sections'
+  hostedEvents: 'hosted_events',
+  sections: 'sections',
+  supremeArts: 'supreme_arts'
 };
 const RANK_ICON_PATH   = 'images/ranks/';
 const REWARD_ICON_PATH = 'images/rewards/';
@@ -39,6 +41,13 @@ const FALLBACK = {
 
 const REWARD_ICONS = ['✦','🎩','🪄','🧥','🔮','💎','💣','🧪','🏅','👑'];
 
+const SUPREME_WAYS = [
+  { code: 'ke', name: 'Knight Enchanter' },
+  { code: 'aa', name: 'Arcane Alchemist' },
+  { code: 'ds', name: 'Draconic Scholar' },
+  { code: 'hc', name: 'High Conjurer' }
+];
+
 let S = {
   ranks:[], reqRegistry:new Map(), influenceTasks:[],
   players:[], layout:new Map(), connections:[],
@@ -46,9 +55,12 @@ let S = {
   selectedReqData:null, activeReqTab:'instruction',
   activeIpTask:null,
   influenceStat:[],
+  supremeArts:[],
   arcaneMastery:[],
+  hostedEvents:[],
   sections:new Map(),
-  activeAmTab:'brief', activeAmQuest:null
+  activeAmTab:'description', activeAmQuest:null,
+  activeHeTab:'description', activeHeQuest:null
 };
 
 // ─── UTILS ───
@@ -128,7 +140,7 @@ async function loadSheet(name, fallback=[], optional=false) {
 }
 
 async function loadAll() {
-  const [ranks,reqs,influenceTasks,tracker,nodelayout,influenceStat,arcaneMastery,sections] = await Promise.all([
+  const [ranks,reqs,influenceTasks,tracker,nodelayout,influenceStat,arcaneMastery,hostedEvents,sections,supremeArts] = await Promise.all([
     loadSheet(SHEET_NAMES.ranks,         FALLBACK.ranks),
     loadSheet(SHEET_NAMES.reqs,          FALLBACK.reqs, true),
     loadSheet(SHEET_NAMES.influenceTasks,FALLBACK.influenceTasks, true),
@@ -136,9 +148,11 @@ async function loadAll() {
     loadSheet(SHEET_NAMES.layout,        FALLBACK.nodelayout),
     loadSheet(SHEET_NAMES.influenceStat, [], true),
     loadSheet(SHEET_NAMES.arcaneMastery, [], true),
-    loadSheet(SHEET_NAMES.sections,      [], true)
+    loadSheet(SHEET_NAMES.hostedEvents,  [], true),
+    loadSheet(SHEET_NAMES.sections,      [], true),
+    loadSheet(SHEET_NAMES.supremeArts,   [], true)
   ]);
-  return {ranks,reqs,influenceTasks,tracker,nodelayout,influenceStat,arcaneMastery,sections};
+  return {ranks,reqs,influenceTasks,tracker,nodelayout,influenceStat,arcaneMastery,hostedEvents,sections,supremeArts};
 }
 
 // ─── PARSERS ───
@@ -166,12 +180,16 @@ function parseRank(row, index) {
     const rName=row[key].trim();
     if(!rName) return;
     const reg=S.reqRegistry.get(normKey(rName));
-    reqs.push({name:rName,description:reg?.description||'',type:reg?.type||'',instruction:reg?.instruction||'',rules:reg?.rules||'',lore:reg?.lore||'',isInfluence:false,_order:parseInt(m[1],10)});
+    reqs.push({name:rName,description:reg?.description||'',type:reg?.type||'',instruction:reg?.instruction||'',rules:reg?.rules||'',lore:reg?.lore||'',isInfluence:false,isArcaneMastery:false,isSupremeArts:false,_order:parseInt(m[1],10)});
   });
   const ipVal=parseInt(getField(row,'influence points','influence'),10);
   if(ipVal>0) reqs.push({name:`${ipVal} Influence Points`,description:`Earn at least ${ipVal} influence points.`,type:'Influence',isInfluence:true,threshold:ipVal,_order:999});
   const amVal=parseInt(getField(row,'arcane_mastery','arcane mastery'),10);
   if(amVal>0) reqs.push({name:`${amVal} Arcane Mastery`,description:`Complete any ${amVal} Arcane Mastery quests.`,type:'Arcane Mastery',isArcaneMastery:true,threshold:amVal,_order:998});
+  SUPREME_WAYS.forEach((way,idx)=>{
+    const saVal=parseInt(getField(row,`supreme_arts_${way.code}`),10);
+    if(saVal>0) reqs.push({name:`${saVal} ${way.name}`,description:`Complete any ${saVal} ${way.name} quests.`,type:`Supreme Arts - ${way.name}`,isSupremeArtsByType:true,supremeWayCode:way.code,supremeWayName:way.name,threshold:saVal,_order:997-idx});
+  });
   reqs.sort((a,b)=>a._order-b._order);
 
   const rewards = [];
@@ -275,10 +293,50 @@ function applyData(data) {
   S.players        = data.tracker;
   S.influenceStat  = data.influenceStat || [];
   S.arcaneMastery  = data.arcaneMastery || [];
+  S.hostedEvents   = data.hostedEvents || [];
+  S.supremeArts    = data.supremeArts || [];
   S.sections       = buildSectionsMap(data.sections || []);
   const {layout,connections} = parseLayoutAndConnections(data.nodelayout);
   S.layout      = layout;
   S.connections = connections.length ? connections : S.ranks.slice(1).map((r,i)=>({from:S.ranks[i].id,to:r.id}));
+}
+
+// ─── SUPREME ARTS HELPERS ───
+function getSaDoneCount(player) {
+  if (!player) return 0;
+  return S.supremeArts.filter(q => isTruthy(getField(player, getField(q, 'name')))).length;
+}
+
+function saQuestDone(player, quest) {
+  if (!player) return false;
+  return isTruthy(getField(player, getField(quest, 'name')));
+}
+
+function getSaDoneCountByWay(player, wayName) {
+  if (!player) return 0;
+  return S.supremeArts.filter(q => {
+    const types = getSupremeTypes(q);
+    const hasWay = types.some(t => normKey(t) === normKey(wayName));
+    return hasWay && saQuestDone(player, q);
+  }).length;
+}
+
+function getSupremeEarned(player, task) {
+  const row = getPlayerSupremeStatRow(player);
+  if (!row) return 0;
+  const tName = getField(task, 'name');
+  const val = getField(row, tName);
+  const parsed = parseInt(val, 10);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+function getPlayerSupremeStatRow(player) {
+  if (!player || !S.supremeArts.length) return null;
+  const pName = normKey(getPlayerName(player));
+  return S.supremeArts.find(row => {
+    const rowName = getField(row, 'Player Name', 'player', 'name');
+    return normKey(rowName) === pName;
+  });
 }
 
 // ─── INFLUENCE STAT ROW MATCHERS ───
@@ -321,6 +379,7 @@ function reqDone(player, req) {
   if(!player) return false;
   if(req.isInfluence) return getInfluence(player)>=req.threshold;
   if(req.isArcaneMastery) return getAmDoneCount(player)>=req.threshold;
+  if(req.isSupremeArtsByType) return getSaDoneCountByWay(player,req.supremeWayName)>=req.threshold;
   return isTruthy(getField(player,req.name));
 }
 
@@ -389,6 +448,12 @@ function renderStatusBar(prog) {
   document.getElementById('nextRankDesc').textContent = player
     ? (prog.nextRank ? `${prog.nextRank.requirements.filter(r=>!reqDone(player,r)).length} Requirements Remaining` : 'The Circle is Complete')
     : '—';
+  document.getElementById('sbDuelWin').textContent = player
+    ? (isTruthy(getField(player,'Mage Duel','mage duel')) ? '✓' : '✕')
+    : '—';
+  document.getElementById('sbEraCount').textContent = player
+    ? (getField(player,'Multi Era Count','multi era count','MultiEraCount')||'0')
+    : '—';
 }
 
 function renderSelector() {
@@ -425,12 +490,6 @@ function renderNodes(prog) {
           <div class="node-title">${esc(rank.name)}</div>
           <div class="node-status s-${rank.status}"><span class="status-dot"></span>${statusLabel(rank.status)}</div>
         </div>
-      </div>
-      <div class="node-body">
-        <div class="node-checklist">${rank.requirements.map(r=>{
-          const done=reqDone(S.selectedPlayer,r);
-          return `<div class="check-item${done?' done':''}"><span class="check-icon ${done?'c':'x'}">${done?'✓':'○'}</span>${esc(r.name)}</div>`;
-        }).join('')}</div>
       </div>`;
     node.addEventListener('click',()=>{
       selectNode(rank.id);
@@ -469,7 +528,8 @@ function renderReqRow(req, player, index) {
   const sel=S.selectedReqName===req.name;
   let badge = '';
   if(req.isInfluence) badge = ` <span class="ip-badge">🔮 ${getInfluence(player)} / ${req.threshold}</span>`;
-  if(req.isArcaneMastery) badge = ` <span class="ip-badge am-badge">🌀 ${getAmDoneCount(player)} / ${req.threshold}</span>`;
+  if(req.isArcaneMastery) badge = ` Mancies` + ` <span class="ip-badge am-badge">🧙‍♂️ ${getAmDoneCount(player)} / ${req.threshold}</span>`;
+  if(req.isSupremeArtsByType) badge = ` Arts` + ` <span class="ip-badge sa-badge">✨ ${getSaDoneCountByWay(player,req.supremeWayName)} / ${req.threshold}</span>`;
   return `<button type="button" class="req-row req-button ${done?'done':'pending'}${sel?' selected':''}" data-req-index="${index}">
     <div class="req-circle">${done?'✓':'○'}</div>
     <div class="req-name">${esc(req.name)}${badge}</div>
@@ -521,6 +581,7 @@ function selectNode(id) {
       if(!req) return;
       if(req.isInfluence){openInfluenceModal();return;}
       if(req.isArcaneMastery){openAmModal();return;}
+      if(req.isSupremeArtsByType){openSaModal(req.supremeWayName);return;}
       S.selectedReqName=req.name;
       S.selectedReqData=req;
       S.activeReqTab='instruction';
@@ -611,6 +672,50 @@ function buildTrackData() {
       });
     });
   }
+  return Object.values(trackMap);
+}
+
+// ─── SUPREME ARTS MODAL (EXPANDED DASHBOARD) ───
+
+function getSupremeTypes(supreme) {
+  const t1=getField(supreme,'type1');
+  const t2=getField(supreme,'type2');
+  const t3=getField(supreme,'type3');
+  return [t1,t2,t3].map(t => String(t || '').trim()).filter(Boolean);
+}
+
+function getAmTypes(quest) {
+  const t1=getField(quest,'type1');
+  const t2=getField(quest,'type2');
+  const t3=getField(quest,'type3');
+  return [t1,t2,t3].map(t => String(t || '').trim()).filter(Boolean);
+}
+
+function buildTrackSupremeData() {
+  const trackMap = {};
+  S.supremeArts.forEach(q => {
+    getSupremeTypes(q).forEach(type => {
+      if(!trackMap[type]) trackMap[type] = {name:type,earned:0,max:0};
+      trackMap[type].max += 1;
+      if (S.selectedPlayer && saQuestDone(S.selectedPlayer, q)) {
+        trackMap[type].earned += 1;
+      }
+    });
+  });
+  return Object.values(trackMap);
+}
+
+function buildTrackAmData() {
+  const trackMap = {};
+  S.arcaneMastery.forEach(q => {
+    getAmTypes(q).forEach(type => {
+      if(!trackMap[type]) trackMap[type] = {name:type,earned:0,max:0};
+      trackMap[type].max += 1;
+      if (S.selectedPlayer && amQuestDone(S.selectedPlayer, q)) {
+        trackMap[type].earned += 1;
+      }
+    });
+  });
   return Object.values(trackMap);
 }
 
@@ -747,6 +852,28 @@ function renderIpTaskList() {
   document.getElementById('ipTaskList').innerHTML=html;
 }
 
+function clearIpFilters() {
+  document.getElementById('ipFilterCategory').value='';
+  document.getElementById('ipFilterStatus').value='';
+  document.getElementById('ipFilterRepeat').value='';
+  document.getElementById('ipFilterSearch').value='';
+  renderIpTaskList();
+}
+
+function clearAmFilters() {
+  document.getElementById('amFilterStatus').value='';
+  document.getElementById('amFilterType').value='';
+  document.getElementById('amFilterSearch').value='';
+  renderAmQuestList();
+}
+
+function clearSaFilters() {
+  document.getElementById('saFilterStatus').value='';
+  document.getElementById('saFilterType').value='';
+  document.getElementById('saFilterSearch').value='';
+  renderSaQuestList();
+}
+
 function closeInfluenceModal() {
   document.getElementById('ipModal').classList.remove('open');
   S.activeIpTask=null;
@@ -767,6 +894,27 @@ function openAmModal() {
 
   renderSectionInfo('amSectionDesc','amSectionAnnouncement','amSectionAnnouncementText','amSectionInfo','arcane_mastery_modal');
 
+  const typeSel = document.getElementById('amFilterType');
+  const typeSet = new Set();
+  S.arcaneMastery.forEach(q => getAmTypes(q).forEach(type => { if (type.trim()) typeSet.add(type.trim()); }));
+  const dynamicTypes = [...typeSet].sort();
+  typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+
+  const tracks = buildTrackAmData();
+  const tracksEl = document.getElementById('amTracks');
+  const tracksSection = document.getElementById('amTracksSection');
+  if(tracks.length) {
+    tracksSection.style.display='';
+    tracksEl.innerHTML = tracks.map(tr=>`
+      <div class="ip-track">
+        <div class="ip-track-name">${esc(tr.name)}</div>
+        <div class="ip-track-bar-wrap"><div class="ip-track-bar" style="width:${tr.max?Math.round(tr.earned/tr.max*100):0}%"></div></div>
+        <div class="ip-track-meta">${tr.earned} / ${tr.max} arts</div>
+      </div>`).join('');
+  } else {
+    tracksSection.style.display='none';
+  }
+
   // Reset detail view
   S.activeAmQuest = null;
   document.getElementById('amQuestDetail').style.display = 'none';
@@ -781,13 +929,16 @@ function renderAmQuestList() {
   const statusFilter = document.getElementById('amFilterStatus').value;
   const search       = document.getElementById('amFilterSearch').value.trim().toLowerCase();
 
+  const typeFilter = document.getElementById('amFilterType').value;
   const filtered = S.arcaneMastery.filter(q => {
     const name = getField(q, 'name');
     const done = amQuestDone(player, q);
+    const types = getAmTypes(q).map(t => t.toLowerCase());
     if (statusFilter === 'mastered'   && !done) return false;
     if (statusFilter === 'unmastered' && done)  return false;
+    if (typeFilter && !types.includes(typeFilter.toLowerCase())) return false;
     if (search && !name.toLowerCase().includes(search) &&
-        !getField(q,'brief').toLowerCase().includes(search)) return false;
+        !getField(q,'description').toLowerCase().includes(search)) return false;
     return true;
   });
 
@@ -796,21 +947,41 @@ function renderAmQuestList() {
     return;
   }
 
-  document.getElementById('amQuestList').innerHTML = filtered.map(q => {
-    const name   = getField(q, 'name');
-    const brief  = getField(q, 'brief');
-    const done   = amQuestDone(player, q);
-    const statusClass = done ? ' am-done' : '';
-    const checkSymbol = done ? '✓' : '○';
-    return `<div class="am-quest-row${statusClass}" data-quest-name="${esc(name)}">
-      <div class="am-quest-check">${checkSymbol}</div>
-      <div class="am-quest-info">
-        <div class="am-quest-name">${esc(name)}</div>
-        ${brief ? `<div class="am-quest-brief">${esc(brief)}</div>` : ''}
+  const groups = {};
+  filtered.forEach(q => {
+    const types = getAmTypes(q);
+    const group = types[0] || 'General';
+    if (!groups[group]) groups[group] = [];
+    groups[group].push(q);
+  });
+
+  let html = '';
+  Object.entries(groups).forEach(([groupName, quests]) => {
+    html += `<div class="ip-category-group">
+      <div class="ip-category-header">${esc(groupName)}</div>
+      <div class="ip-category-list">
+        ${quests.map(q => {
+          const name = getField(q, 'name');
+          const description = getField(q, 'description');
+          const done = amQuestDone(player, q);
+          const statusClass = done ? ' am-done' : '';
+          const checkSymbol = done ? '✓' : '○';
+          const types = getAmTypes(q);
+          return `<div class="am-quest-row${statusClass}" data-quest-name="${esc(name)}">
+            <div class="am-quest-check">${checkSymbol}</div>
+            <div class="am-quest-info">
+              <div class="am-quest-name">${esc(name)}</div>
+              ${description ? `<div class="am-quest-description">${esc(description)}</div>` : ''}
+              ${types.length?`<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`:''}
+            </div>
+            <div class="am-quest-arrow">›</div>
+          </div>`;
+        }).join('')}
       </div>
-      <div class="am-quest-arrow">›</div>
     </div>`;
-  }).join('');
+  });
+
+  document.getElementById('amQuestList').innerHTML = html;
 
   document.getElementById('amQuestList').querySelectorAll('.am-quest-row').forEach(el => {
     el.addEventListener('click', () => {
@@ -823,20 +994,24 @@ function renderAmQuestList() {
 
 function openAmQuestDetail(quest) {
   S.activeAmQuest = quest;
-  S.activeAmTab   = 'brief';
+  S.activeAmTab   = 'description';
   const player = S.selectedPlayer;
   const done   = amQuestDone(player, quest);
   const name   = getField(quest, 'name');
+  const types  = getAmTypes(quest);
 
   document.getElementById('amQuestList').style.display   = 'none';
   document.getElementById('amQuestDetail').style.display = '';
   document.getElementById('amDetailName').textContent    = name;
+  document.getElementById('amDetailMeta').innerHTML      = types.length
+    ? `<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`
+    : `<div class="ip-tags"><span class="ip-tag">Type: Unknown</span></div>`;
   document.getElementById('amDetailStatus').textContent  = done ? '✓ Mastered' : '○ Not Yet Mastered';
   document.getElementById('amDetailStatus').className    = 'am-detail-status ' + (done ? 'am-detail-done' : 'am-detail-pending');
 
   // Activate first tab with content
-  const tabs = ['brief','lore','rule','submission','note'];
-  const firstWithContent = tabs.find(t => !!getField(quest, t)) || 'brief';
+  const tabs = ['description','instructions','lore','rule','submission','note'];
+  const firstWithContent = tabs.find(t => !!getField(quest, t)) || 'description';
   S.activeAmTab = firstWithContent;
 
   document.querySelectorAll('.am-tab').forEach(btn => {
@@ -856,11 +1031,330 @@ function renderAmTab(quest, tab) {
   document.getElementById('amTabContent').innerHTML = val
     ? parseFormatting(val)
     : '<span style="color:var(--text3);font-style:italic">No content available.</span>';
+
+  const copyBtn = document.getElementById('amCopySubmissionBtn');
+  if (tab === 'submission' && val) {
+    copyBtn.style.display = '';
+    copyBtn.disabled = false;
+    copyBtn.textContent = 'Copy';
+    copyBtn.onclick = () => copySubmissionText(val, copyBtn);
+  } else {
+    copyBtn.style.display = 'none';
+  }
+}
+
+function copySubmissionText(text, button) {
+  if (!text) return;
+  const normalized = text.replace(/\r\n?/g, '\n').trim();
+  copyTextToClipboard(normalized).then(() => {
+    const original = button.textContent;
+    button.textContent = 'Copied!';
+    button.disabled = true;
+    setTimeout(() => {
+      button.textContent = original;
+      button.disabled = false;
+    }, 1400);
+  }).catch(() => {
+    const original = button.textContent;
+    button.textContent = 'Copy failed';
+    button.disabled = true;
+    setTimeout(() => {
+      button.textContent = original;
+      button.disabled = false;
+    }, 1400);
+  });
+}
+
+function copyTextToClipboard(value) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(value);
+  }
+  return new Promise((resolve, reject) => {
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      successful ? resolve() : reject();
+    } catch (err) {
+      document.body.removeChild(textarea);
+      reject(err);
+    }
+  });
 }
 
 function closeAmModal() {
   document.getElementById('amModal').classList.remove('open');
   S.activeAmQuest = null;
+  setBnavActive('map');
+}
+
+function getHeTypes(event) {
+  const t1 = getField(event, 'type1');
+  const t2 = getField(event, 'type2');
+  const t3 = getField(event, 'type3');
+  return [t1, t2, t3].map(t => String(t || '').trim()).filter(Boolean);
+}
+
+function isHeDuelQuest(quest) {
+  return getHeTypes(quest).some(type => normKey(type) === 'duels');
+}
+
+function getHeQuestTrackerFields(quest) {
+  if (!quest) return null;
+  const qName = String(getField(quest, 'name') || '').trim();
+  const mapping = {
+    'Playful Embers': { participation: 'Playful Embers Participation', win: 'Playful Embers Win' },
+    'Playful Dundr': { participation: 'Playful Dundr Participation', win: 'Playful Dundr Win' },
+    'Playful Drop': { participation: 'Playful Drop Participation', win: 'Playful Drop Win' },
+    'Mournful': { participation: 'Mournful Participation', win: 'Mournful Win' },
+    'Drengr Games': { participation: 'Drengr Games Participation', win: 'Drengr Games Win' }
+  };
+  return mapping[qName] || null;
+}
+
+function getHeTrackerValue(player, quest, kind) {
+  if (!player || !quest) return 0;
+  const trackerFields = getHeQuestTrackerFields(quest);
+  if (trackerFields?.[kind]) {
+    const raw = getField(player, trackerFields[kind]);
+    const parsed = parseInt(String(raw).trim(), 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  const qName = String(getField(quest, 'name') || '').trim();
+  const fallbackField = `${qName} ${kind}`;
+  const raw = getField(player, fallbackField);
+  const parsed = parseInt(String(raw).trim(), 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isHeDrengrGamesCompleted(player) {
+  if (!player) return false;
+  const row = getPlayerInfluenceStatRow(player);
+  if (!row) return false;
+  const raw = getField(row, 'Drengr Magus');
+  if (raw === '') return false;
+  const parsed = parseInt(String(raw).trim(), 10);
+  if (!Number.isNaN(parsed)) return parsed > 0;
+  return isTruthy(raw);
+}
+
+function getHeDoneCount(player) {
+  if (!player) return 0;
+  return S.hostedEvents.filter(q => heQuestDone(player, q)).length;
+}
+
+function getHeStatSummary(player) {
+  const wins = parseInt(String(getField(player, 'Duels Win')).trim(), 10) || 0;
+  const participations = parseInt(String(getField(player, 'Duels Participation')).trim(), 10) || 0;
+  return { wins, participations, totalDuelEvents: S.hostedEvents.filter(isHeDuelQuest).length };
+}
+
+function heQuestDone(player, quest) {
+  if (!player || !quest) return false;
+  const qName = String(getField(quest, 'name') || '').trim();
+  console.log("normKey(qName)",normKey(qName));
+  if (normKey(qName) === 'drengr games') return isHeDrengrGamesCompleted(player);
+  const win = getHeTrackerValue(player, quest, 'win');
+  const participation = getHeTrackerValue(player, quest, 'participation');
+  if (win > 0 || participation > 0) return true;
+  return isTruthy(getField(player, qName));
+}
+
+function buildTrackHeData() {
+  const trackMap = {};
+  S.hostedEvents.forEach(q => {
+    getHeTypes(q).forEach(type => {
+      if (!trackMap[type]) trackMap[type] = {name:type,earned:0,max:0};
+      trackMap[type].max += 1;
+      if (S.selectedPlayer && heQuestDone(S.selectedPlayer, q)) {
+        trackMap[type].earned += 1;
+      }
+    });
+  });
+  return Object.values(trackMap);
+}
+
+function openHeModal() {
+  const player = S.selectedPlayer;
+  const stats = getHeStatSummary(player);
+
+  document.getElementById('heStatWins').textContent = stats.wins;
+  document.getElementById('heStatParticipation').textContent = stats.participations;
+  document.getElementById('heModalProgress').textContent = `${stats.wins} wins / ${stats.participations} participations`;
+
+  renderSectionInfo('heSectionDesc','heSectionAnnouncement','heSectionAnnouncementText','heSectionInfo','hosted_events_modal');
+
+  const typeSel = document.getElementById('heFilterType');
+  const typeSet = new Set();
+  S.hostedEvents.forEach(q => getHeTypes(q).forEach(type => { if (type.trim()) typeSet.add(type.trim()); }));
+  const dynamicTypes = [...typeSet].sort();
+  typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+
+  const tracks = buildTrackHeData();
+  const tracksEl = document.getElementById('heTracks');
+  const tracksSection = document.getElementById('heTracksSection');
+  if(tracks.length) {
+    tracksSection.style.display='';
+    tracksEl.innerHTML = tracks.map(tr=>`
+      <div class="ip-track">
+        <div class="ip-track-name">${esc(tr.name)}</div>
+        <div class="ip-track-bar-wrap"><div class="ip-track-bar" style="width:${tr.max?Math.round(tr.earned/tr.max*100):0}%"></div></div>
+        <div class="ip-track-meta">${tr.earned} / ${tr.max} events</div>
+      </div>`).join('');
+  } else {
+    tracksSection.style.display='none';
+  }
+
+  S.activeHeQuest = null;
+  document.getElementById('heQuestDetail').style.display = 'none';
+  document.getElementById('heQuestList').style.display   = '';
+
+  renderHeQuestList();
+  document.getElementById('heModal').classList.add('open');
+}
+
+function renderHeQuestList() {
+  const player      = S.selectedPlayer;
+  const statusFilter = document.getElementById('heFilterStatus').value;
+  const search       = document.getElementById('heFilterSearch').value.trim().toLowerCase();
+  const typeFilter   = document.getElementById('heFilterType').value;
+  const filtered = S.hostedEvents.filter(q => {
+    const name = getField(q, 'name');
+    const done = heQuestDone(player, q);
+    const types = getHeTypes(q).map(t => t.toLowerCase());
+    if (statusFilter === 'mastered'   && !done) return false;
+    if (statusFilter === 'unmastered' && done)  return false;
+    if (typeFilter && !types.includes(typeFilter.toLowerCase())) return false;
+    if (search && !name.toLowerCase().includes(search) &&
+        !getField(q,'description').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    document.getElementById('heQuestList').innerHTML = `<div style="color:var(--text3);padding:24px;text-align:center;font-style:italic;">No events found.</div>`;
+    return;
+  }
+
+  const groups = {};
+  filtered.forEach(q => {
+    const types = getHeTypes(q);
+    const group = types[0] || 'General';
+    if (!groups[group]) groups[group] = [];
+    groups[group].push(q);
+  });
+
+  let html = '';
+  Object.entries(groups).forEach(([groupName, quests]) => {
+    html += `<div class="ip-category-group">
+      <div class="ip-category-header">${esc(groupName)}</div>
+      <div class="ip-category-list">
+        ${quests.map(q => {
+          const name = getField(q, 'name');
+          const description = getField(q, 'description');
+          const done = heQuestDone(player, q);
+          const statusClass = done ? ' am-done' : '';
+          const checkSymbol = done ? '✓' : '○';
+          const types = getHeTypes(q);
+          const duelStats = isHeDuelQuest(q)
+            ? `<div class="ip-tags"><span class="ip-tag">Wins: ${getHeTrackerValue(player, q, 'win')}</span><span class="ip-tag">Participation: ${getHeTrackerValue(player, q, 'participation')}</span></div>`
+            : '';
+          const drengrStatus = normKey(name) === 'drengr-games'
+            ? `<div class="ip-tags"><span class="ip-tag">Completed: ${isHeDrengrGamesCompleted(player) ? '✓' : '○'}</span></div>`
+            : '';
+          return `<div class="am-quest-row${statusClass}" data-quest-name="${esc(name)}">
+            <div class="am-quest-check">${checkSymbol}</div>
+            <div class="am-quest-info">
+              <div class="am-quest-name">${esc(name)}</div>
+              ${description ? `<div class="am-quest-description">${esc(description)}</div>` : ''}
+              ${types.length?`<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`:''}
+              ${duelStats}
+              ${drengrStatus}
+            </div>
+            <div class="am-quest-arrow">›</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('heQuestList').innerHTML = html;
+
+  document.getElementById('heQuestList').querySelectorAll('.am-quest-row').forEach(el => {
+    el.addEventListener('click', () => {
+      const questName = el.dataset.questName;
+      const quest = S.hostedEvents.find(q => getField(q,'name') === questName);
+      if (quest) openHeQuestDetail(quest);
+    });
+  });
+}
+
+function openHeQuestDetail(quest) {
+  S.activeHeQuest = quest;
+  S.activeHeTab   = 'description';
+  const player = S.selectedPlayer;
+  const done   = heQuestDone(player, quest);
+  const name   = getField(quest, 'name');
+  const types  = getHeTypes(quest);
+
+  document.getElementById('heQuestList').style.display   = 'none';
+  document.getElementById('heQuestDetail').style.display = '';
+  document.getElementById('heDetailName').textContent    = name;
+  document.getElementById('heDetailMeta').innerHTML      = types.length
+    ? `<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`
+    : `<div class="ip-tags"><span class="ip-tag">Type: Unknown</span></div>`;
+  document.getElementById('heDetailStatus').textContent  = done ? '✓ Completed' : '○ Incomplete';
+  document.getElementById('heDetailStatus').className    = 'am-detail-status ' + (done ? 'am-detail-done' : 'am-detail-pending');
+
+  const tabs = ['description','instructions','lore','rule','submission','note'];
+  const firstWithContent = tabs.find(t => !!getField(quest, t)) || 'description';
+  S.activeHeTab = firstWithContent;
+
+  document.querySelectorAll('#heQuestDetail .am-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === S.activeHeTab);
+    btn.onclick = () => {
+      S.activeHeTab = btn.dataset.tab;
+      document.querySelectorAll('#heQuestDetail .am-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === S.activeHeTab));
+      renderHeTab(quest, S.activeHeTab);
+    };
+  });
+
+  renderHeTab(quest, S.activeHeTab);
+}
+
+function renderHeTab(quest, tab) {
+  const val = getField(quest, tab);
+  document.getElementById('heTabContent').innerHTML = val
+    ? parseFormatting(val)
+    : '<span style="color:var(--text3);font-style:italic">No content available.</span>';
+
+  const copyBtn = document.getElementById('heCopySubmissionBtn');
+  if (tab === 'submission' && val) {
+    copyBtn.style.display = '';
+    copyBtn.disabled = false;
+    copyBtn.textContent = 'Copy';
+    copyBtn.onclick = () => copySubmissionText(val, copyBtn);
+  } else {
+    copyBtn.style.display = 'none';
+  }
+}
+
+function clearHeFilters() {
+  document.getElementById('heFilterStatus').value='';
+  document.getElementById('heFilterType').value='';
+  document.getElementById('heFilterSearch').value='';
+  renderHeQuestList();
+}
+
+function closeHeModal() {
+  document.getElementById('heModal').classList.remove('open');
+  S.activeHeQuest = null;
   setBnavActive('map');
 }
 
@@ -994,6 +1488,179 @@ function handleSearchSelect(type, label) {
   }
 }
 
+// ─── SUPREME ARTS MODAL ───
+function openSaModal(wayName = '') {
+  const player = S.selectedPlayer;
+  const total = S.supremeArts.length;
+  const done = getSaDoneCount(player);
+
+  document.getElementById('saStatDone').textContent      = done;
+  document.getElementById('saStatTotal').textContent     = total;
+  document.getElementById('saStatRemaining').textContent = Math.max(0, total - done);
+  document.getElementById('saStatPct').textContent       = total ? `${Math.round(done/total*100)}%` : '0%';
+  document.getElementById('saModalProgress').textContent = `${done} / ${total} Mastered`;
+
+  renderSectionInfo('saSectionDesc','saSectionAnnouncement','saSectionAnnouncementText','saSectionInfo','supreme_arts_modal');
+
+  const typeSel = document.getElementById('saFilterType');
+  const typeSet = new Set();
+  S.supremeArts.forEach(q => getSupremeTypes(q).forEach(type => { if (type.trim()) typeSet.add(type.trim()); }));
+  const dynamicTypes = [...typeSet].sort();
+  typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  if(wayName) {
+    typeSel.value = wayName;
+  }
+
+  // Supreme Way tracks
+  const tracks = buildTrackSupremeData();
+  const tracksEl = document.getElementById('saTracks');
+  const tracksSection = document.getElementById('saTracksSection');
+  if(tracks.length) {
+    tracksSection.style.display='';
+    tracksEl.innerHTML = tracks.map(tr=>`
+      <div class="ip-track">
+        <div class="ip-track-name">${esc(tr.name)}</div>
+        <div class="ip-track-bar-wrap"><div class="ip-track-bar" style="width:${tr.max?Math.round(tr.earned/tr.max*100):0}%"></div></div>
+        <div class="ip-track-meta">${tr.earned} / ${tr.max} arts</div>
+      </div>`).join('');
+  } else {
+    tracksSection.style.display='none';
+  }
+
+  // Reset detail view
+  S.activeSaQuest = null;
+  document.getElementById('saQuestDetail').style.display = 'none';
+  document.getElementById('saQuestList').style.display   = '';
+
+  renderSaQuestList();
+  document.getElementById('saModal').classList.add('open');
+}
+
+function renderSaQuestList() {
+  const player      = S.selectedPlayer;
+  const statusFilter = document.getElementById('saFilterStatus').value;
+  const search       = document.getElementById('saFilterSearch').value.trim().toLowerCase();
+
+  const typeFilter = document.getElementById('saFilterType').value;
+  const filtered = S.supremeArts.filter(q => {
+    const name = getField(q, 'name');
+    const done = saQuestDone(player, q);
+    const types = getSupremeTypes(q).map(t => t.toLowerCase());
+    if (statusFilter === 'mastered'   && !done) return false;
+    if (statusFilter === 'unmastered' && done)  return false;
+    if (typeFilter && !types.includes(typeFilter.toLowerCase())) return false;
+    if (search && !name.toLowerCase().includes(search) &&
+        !getField(q,'description').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    document.getElementById('saQuestList').innerHTML = `<div style="color:var(--text3);padding:24px;text-align:center;font-style:italic;">No quests found.</div>`;
+    return;
+  }
+
+  const groups = {};
+  filtered.forEach(q => {
+    const types = getSupremeTypes(q);
+    const group = types[0] || 'General';
+    if (!groups[group]) groups[group] = [];
+    groups[group].push(q);
+  });
+
+  let html = '';
+  Object.entries(groups).forEach(([groupName, quests]) => {
+    html += `<div class="ip-category-group">
+      <div class="ip-category-header">${esc(groupName)}</div>
+      <div class="ip-category-list">
+        ${quests.map(q => {
+          const name = getField(q, 'name');
+          const description = getField(q, 'description');
+          const done = saQuestDone(player, q);
+          const statusClass = done ? ' sa-done' : '';
+          const checkSymbol = done ? '✓' : '○';
+          const types = getSupremeTypes(q);
+          return `<div class="sa-quest-row${statusClass}" data-quest-name="${esc(name)}">
+            <div class="sa-quest-check">${checkSymbol}</div>
+            <div class="sa-quest-info">
+              <div class="sa-quest-name">${esc(name)}</div>
+              ${description ? `<div class="sa-quest-description">${esc(description)}</div>` : ''}
+              ${types.length?`<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`:''}
+            </div>
+            <div class="sa-quest-arrow">›</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('saQuestList').innerHTML = html;
+
+  document.getElementById('saQuestList').querySelectorAll('.sa-quest-row').forEach(el => {
+    el.addEventListener('click', () => {
+      const questName = el.dataset.questName;
+      const quest = S.supremeArts.find(q => getField(q,'name') === questName);
+      if (quest) openSaQuestDetail(quest);
+    });
+  });
+}
+
+function openSaQuestDetail(quest) {
+  S.activeSaQuest = quest;
+  S.activeSaTab   = 'description';
+  const player = S.selectedPlayer;
+  const done   = saQuestDone(player, quest);
+  const name   = getField(quest, 'name');
+  const types  = getSupremeTypes(quest);
+
+  document.getElementById('saQuestList').style.display   = 'none';
+  document.getElementById('saQuestDetail').style.display = '';
+  document.getElementById('saDetailName').textContent    = name;
+  document.getElementById('saDetailMeta').innerHTML      = types.length
+    ? `<div class="ip-tags"><span class="ip-tag">${esc(types.join(', '))}</span></div>`
+    : `<div class="ip-tags"><span class="ip-tag">Type: Unknown</span></div>`;
+  document.getElementById('saDetailStatus').textContent  = done ? '✓ Mastered' : '○ Not Yet Mastered';
+  document.getElementById('saDetailStatus').className    = 'sa-detail-status ' + (done ? 'sa-detail-done' : 'sa-detail-pending');
+
+  // Activate first tab with content
+  const tabs = ['description','instructions','lore','rule','submission','note'];
+  const firstWithContent = tabs.find(t => !!getField(quest, t)) || 'description';
+  S.activeSaTab = firstWithContent;
+
+  document.querySelectorAll('.sa-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === S.activeSaTab);
+    btn.onclick = () => {
+      S.activeSaTab = btn.dataset.tab;
+      document.querySelectorAll('.sa-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === S.activeSaTab));
+      renderSaTab(quest, S.activeSaTab);
+    };
+  });
+
+  renderSaTab(quest, S.activeSaTab);
+}
+
+function renderSaTab(quest, tab) {
+  const val = getField(quest, tab);
+  document.getElementById('saTabContent').innerHTML = val
+    ? parseFormatting(val)
+    : '<span style="color:var(--text3);font-style:italic">No content available.</span>';
+
+  const copyBtn = document.getElementById('saCopySubmissionBtn');
+  if (tab === 'submission' && val) {
+    copyBtn.style.display = '';
+    copyBtn.disabled = false;
+    copyBtn.textContent = 'Copy';
+    copyBtn.onclick = () => copySubmissionText(val, copyBtn);
+  } else {
+    copyBtn.style.display = 'none';
+  }
+}
+
+function closeSaModal() {
+  document.getElementById('saModal').classList.remove('open');
+  S.activeSaQuest = null;
+  setBnavActive('map');
+}
+
 // ─── MOBILE DRAWER ───
 function openDrawer(){
   document.getElementById('detailPanel').classList.add('drawer-open');
@@ -1016,6 +1683,7 @@ function initBottomNav() {
       else if(btn.dataset.view==='search') openSearchModal();
       else if(btn.dataset.view==='influence') openInfluenceModal();
       else if(btn.dataset.view==='arcane') openAmModal();
+      else if(btn.dataset.view==='supreme') openSaModal();
     });
   });
 }
@@ -1071,11 +1739,27 @@ async function init() {
     document.getElementById(id).addEventListener('change',renderIpTaskList);
   });
   document.getElementById('ipFilterSearch').addEventListener('input',renderIpTaskList);
+  document.getElementById('ipClearFilters').addEventListener('click',clearIpFilters);
 
   // Topbar buttons
   document.getElementById('searchBtn').addEventListener('click',openSearchModal);
   document.getElementById('influenceNavBtn').addEventListener('click',openInfluenceModal);
   document.getElementById('arcaneNavBtn').addEventListener('click',openAmModal);
+  document.getElementById('hostedNavBtn').addEventListener('click',openHeModal);
+  document.getElementById('supremeNavBtn').addEventListener('click',openSaModal);
+
+  // Hosted Events modal
+  document.getElementById('heModalClose').addEventListener('click',closeHeModal);
+  document.getElementById('heModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeHeModal();});
+  document.getElementById('heDetailBack').addEventListener('click',()=>{
+    S.activeHeQuest=null;
+    document.getElementById('heQuestDetail').style.display='none';
+    document.getElementById('heQuestList').style.display='';
+  });
+  document.getElementById('heFilterStatus').addEventListener('change',renderHeQuestList);
+  document.getElementById('heFilterType').addEventListener('change',renderHeQuestList);
+  document.getElementById('heFilterSearch').addEventListener('input',renderHeQuestList);
+  document.getElementById('heClearFilters').addEventListener('click',clearHeFilters);
 
   // Arcane Mastery modal
   document.getElementById('amModalClose').addEventListener('click',closeAmModal);
@@ -1086,7 +1770,9 @@ async function init() {
     document.getElementById('amQuestList').style.display='';
   });
   document.getElementById('amFilterStatus').addEventListener('change',renderAmQuestList);
+  document.getElementById('amFilterType').addEventListener('change',renderAmQuestList);
   document.getElementById('amFilterSearch').addEventListener('input',renderAmQuestList);
+  document.getElementById('amClearFilters').addEventListener('click',clearAmFilters);
 
   // Search modal
   document.getElementById('searchModalClose').addEventListener('click',closeSearchModal);
@@ -1101,10 +1787,23 @@ async function init() {
     document.getElementById('searchClear').style.display=e.target.value?'':'none';
   });
 
+  // Supreme Arts modal
+  document.getElementById('saModalClose').addEventListener('click',closeSaModal);
+  document.getElementById('saModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeSaModal();});
+  document.getElementById('saDetailBack').addEventListener('click',()=>{
+    S.activeSaQuest=null;
+    document.getElementById('saQuestDetail').style.display='none';
+    document.getElementById('saQuestList').style.display='';
+  });
+  document.getElementById('saFilterStatus').addEventListener('change',renderSaQuestList);
+  document.getElementById('saFilterType').addEventListener('change',renderSaQuestList);
+  document.getElementById('saFilterSearch').addEventListener('input',renderSaQuestList);
+  document.getElementById('saClearFilters').addEventListener('click',clearSaFilters);
+
   // Keyboard shortcut: Cmd/Ctrl+K for search
   document.addEventListener('keydown',e=>{
     if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openSearchModal();}
-    if(e.key==='Escape'){closeSearchModal();closeInfluenceModal();closeAmModal();}
+    if(e.key==='Escape'){closeSearchModal();closeInfluenceModal();closeAmModal();closeSaModal();}
   });
 
   initBottomNav();
@@ -1126,3 +1825,4 @@ window.addEventListener('resize',()=>{
   });
 });
 document.addEventListener('DOMContentLoaded',init);
+

@@ -33,8 +33,16 @@
         <span class="topbar-btn-label">Influence</span>
       </button>
       <button class="topbar-btn" id="arcaneNavBtn" aria-label="Open Arcane Mastery">
-        <span class="topbar-btn-icon">🌀</span>
+        <span class="topbar-btn-icon">🧙‍♂️</span>
         <span class="topbar-btn-label">Arcane Mastery</span>
+      </button>
+      <button class="topbar-btn" id="hostedNavBtn" aria-label="Open Hosted Events">
+        <span class="topbar-btn-icon">🌀</span>
+        <span class="topbar-btn-label">Hosted Events</span>
+      </button>
+      <button class="topbar-btn" id="supremeNavBtn" aria-label="Open Supreme Arts Tracker">
+        <span class="topbar-btn-icon">✨</span>
+        <span class="topbar-btn-label">Supreme Arts</span>
       </button>
     </div>
   </header>
@@ -85,6 +93,22 @@
         <div class="sb-section sb-next">
           <div class="sb-next-rank" id="nextRankName">—</div>
           <div class="sb-next-desc" id="nextRankDesc">—</div>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <!-- Duel Win section -->
+        <div class="sb-section sb-era">
+          <div class="sb-era-label">Duel Win/Part</div>
+          <div class="sb-era-value sb-badge" id="sbDuelWin">—</div>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <!-- Multi-Era section -->
+        <div class="sb-section sb-era">
+          <div class="sb-era-label">Multi-Era</div>
+          <div class="sb-era-value" id="sbEraCount">—</div>
         </div>
 
       </div><!-- /status-bar -->
@@ -224,6 +248,7 @@
             <label class="ip-filter-label">Search</label>
             <input class="ip-filter-input" id="ipFilterSearch" type="text" placeholder="Search tasks…">
           </div>
+          <button class="ip-filter-clear" id="ipClearFilters" type="button">Clear</button>
         </div>
 
         <!-- SECTION 4+5: Task Browser + Detail -->
@@ -253,7 +278,7 @@
     <div class="am-modal">
       <div class="am-modal-header">
         <div class="am-modal-title">
-          <span class="am-modal-icon">🌀</span>
+          <span class="am-modal-icon">🧙‍♂️</span>
           <span>Arcane Mastery</span>
         </div>
         <div class="am-modal-sub" id="amModalProgress">0 / 0 Mastered</div>
@@ -291,6 +316,12 @@
           </div>
         </div>
 
+        <!-- Mastery Tracks -->
+        <div class="ip-tracks-section" id="amTracksSection">
+          <div class="ip-section-title">Arcane Mastery Tracks</div>
+          <div class="ip-tracks" id="amTracks"></div>
+        </div>
+
         <!-- Filters -->
         <div class="am-filters">
           <div class="ip-filter-group">
@@ -302,9 +333,16 @@
             </select>
           </div>
           <div class="ip-filter-group">
+            <label class="ip-filter-label">Type</label>
+            <select class="ip-filter-select" id="amFilterType">
+              <option value="">All Types</option>
+            </select>
+          </div>
+          <div class="ip-filter-group">
             <label class="ip-filter-label">Search</label>
             <input class="ip-filter-input" id="amFilterSearch" type="text" placeholder="Search mancies…">
           </div>
+          <button class="ip-filter-clear" id="amClearFilters" type="button">Clear</button>
         </div>
 
         <!-- Quest list -->
@@ -315,15 +353,109 @@
           <div class="am-quest-detail" id="amQuestDetail" style="display:none">
             <button class="ip-detail-back" id="amDetailBack">← Back</button>
             <div class="am-detail-name" id="amDetailName"></div>
+            <div class="am-detail-meta" id="amDetailMeta"></div>
             <div class="am-detail-status" id="amDetailStatus"></div>
             <div class="am-detail-tabs">
-              <button class="am-tab active" data-tab="brief">Brief</button>
+              <button class="am-tab active" data-tab="description">Description</button>
+              <button class="am-tab" data-tab="instructions">Instructions</button>
               <button class="am-tab" data-tab="lore">Lore</button>
               <button class="am-tab" data-tab="rule">Rules</button>
               <button class="am-tab" data-tab="submission">Submission</button>
-              <button class="am-tab" data-tab="note">Notes</button>
             </div>
+            <button class="copy-btn" id="amCopySubmissionBtn" type="button" style="display:none">Copy</button>
             <div class="am-tab-content" id="amTabContent"></div>
+          </div>
+        </div>
+
+      </div><!-- /am-modal-body -->
+    </div><!-- /am-modal -->
+  </div><!-- /am-modal-overlay -->
+
+  <!-- ══════════════════════════════════════════
+       HOSTED EVENTS MODAL
+  ══════════════════════════════════════════ -->
+  <div class="am-modal-overlay" id="heModal">
+    <div class="am-modal">
+      <div class="am-modal-header">
+        <div class="am-modal-title">
+          <span class="am-modal-icon">🌀</span>
+          <span>Hosted Events</span>
+        </div>
+        <div class="am-modal-sub" id="heModalProgress">0 Wins / 0 Participations</div>
+        <button class="am-modal-close" id="heModalClose" aria-label="Close">✕</button>
+      </div>
+
+      <!-- Section description + announcement -->
+      <div class="am-section-info" id="heSectionInfo" style="display:none">
+        <div class="am-section-desc" id="heSectionDesc"></div>
+        <div class="am-section-announcement" id="heSectionAnnouncement" style="display:none">
+          <span class="section-banner-ann-icon">📢</span>
+          <span id="heSectionAnnouncementText"></span>
+        </div>
+      </div>
+
+      <div class="am-modal-body">
+
+        <!-- Overview -->
+        <div class="am-overview" id="heOverview">
+          <div class="am-stat">
+            <div class="am-stat-val" id="heStatWins">0</div>
+            <div class="am-stat-lbl">Wins</div>
+          </div>
+          <div class="am-stat">
+            <div class="am-stat-val am-stat-total" id="heStatParticipation">0</div>
+            <div class="am-stat-lbl">Participations</div>
+          </div>
+        </div>
+
+        <!-- Hosted Event Tracks -->
+        <div class="ip-tracks-section" id="heTracksSection">
+          <div class="ip-section-title">Hosted Event Tracks</div>
+          <div class="ip-tracks" id="heTracks"></div>
+        </div>
+
+        <!-- Filters -->
+        <div class="am-filters">
+          <div class="ip-filter-group">
+            <label class="ip-filter-label">Status</label>
+            <select class="ip-filter-select" id="heFilterStatus">
+              <option value="">All</option>
+              <option value="mastered">Completed</option>
+              <option value="unmastered">Incomplete</option>
+            </select>
+          </div>
+          <div class="ip-filter-group">
+            <label class="ip-filter-label">Type</label>
+            <select class="ip-filter-select" id="heFilterType">
+              <option value="">All Types</option>
+            </select>
+          </div>
+          <div class="ip-filter-group">
+            <label class="ip-filter-label">Search</label>
+            <input class="ip-filter-input" id="heFilterSearch" type="text" placeholder="Search events…">
+          </div>
+          <button class="ip-filter-clear" id="heClearFilters" type="button">Clear</button>
+        </div>
+
+        <!-- Quest list -->
+        <div class="am-content-area">
+          <div class="am-quest-list" id="heQuestList"></div>
+
+          <!-- Quest detail -->
+          <div class="am-quest-detail" id="heQuestDetail" style="display:none">
+            <button class="ip-detail-back" id="heDetailBack">← Back</button>
+            <div class="am-detail-name" id="heDetailName"></div>
+            <div class="am-detail-meta" id="heDetailMeta"></div>
+            <div class="am-detail-status" id="heDetailStatus"></div>
+            <div class="am-detail-tabs">
+              <button class="am-tab active" data-tab="description">Description</button>
+              <button class="am-tab" data-tab="instructions">Instructions</button>
+              <button class="am-tab" data-tab="lore">Lore</button>
+              <button class="am-tab" data-tab="rule">Rules</button>
+              <button class="am-tab" data-tab="submission">Submission</button>
+            </div>
+            <button class="copy-btn" id="heCopySubmissionBtn" type="button" style="display:none">Copy</button>
+            <div class="am-tab-content" id="heTabContent"></div>
           </div>
         </div>
 
@@ -366,13 +498,115 @@
     </div>
   </div>
 
+  <!-- ══════════════════════════════════════════
+       SUPREME ARTS MODAL (expanded dashboard)
+  ══════════════════════════════════════════ -->
+  <div class="sa-modal-overlay" id="saModal">
+    <div class="sa-modal">
+      <div class="sa-modal-header">
+        <div class="sa-modal-title">
+          <span class="sa-modal-icon">✨</span>
+          <span>Supreme Arts</span>
+        </div>
+        <div class="sa-modal-sub" id="saModalProgress">0 / 0 Mastered</div>
+        <button class="sa-modal-close" id="saModalClose" aria-label="Close">✕</button>
+      </div>
+
+      <!-- Section description + announcement -->
+      <div class="sa-section-info" id="saSectionInfo" style="display:none">
+        <div class="sa-section-desc" id="saSectionDesc"></div>
+        <div class="sa-section-announcement" id="saSectionAnnouncement" style="display:none">
+          <span class="section-banner-ann-icon">📢</span>
+          <span id="saSectionAnnouncementText"></span>
+        </div>
+      </div>
+
+      <div class="sa-modal-body">
+
+        <!-- Overview -->
+        <div class="sa-overview" id="saOverview">
+          <div class="sa-stat">
+            <div class="sa-stat-val" id="saStatDone">0</div>
+            <div class="sa-stat-lbl">Mastered</div>
+          </div>
+          <div class="sa-stat">
+            <div class="sa-stat-val sa-stat-total" id="saStatTotal">0</div>
+            <div class="sa-stat-lbl">Total</div>
+          </div>
+          <div class="sa-stat">
+            <div class="sa-stat-val sa-stat-rem" id="saStatRemaining">0</div>
+            <div class="sa-stat-lbl">Remaining</div>
+          </div>
+          <div class="sa-stat">
+            <div class="sa-stat-val sa-stat-pct" id="saStatPct">0%</div>
+            <div class="sa-stat-lbl">Completion</div>
+          </div>
+        </div>
+
+        <!-- Ways Tracks -->
+        <div class="ip-tracks-section" id="saTracksSection">
+          <div class="ip-section-title">Supreme Arts Tracks</div>
+          <div class="ip-tracks" id="saTracks"></div>
+        </div>
+
+        <!-- Filters -->
+        <div class="sa-filters">
+          <div class="ip-filter-group">
+            <label class="ip-filter-label">Status</label>
+            <select class="ip-filter-select" id="saFilterStatus">
+              <option value="">All</option>
+              <option value="mastered">Mastered</option>
+              <option value="unmastered">Not Yet</option>
+            </select>
+          </div>
+          <div class="ip-filter-group">
+            <label class="ip-filter-label">Type</label>
+            <select class="ip-filter-select" id="saFilterType">
+              <option value="">All Types</option>
+            </select>
+          </div>
+          <div class="ip-filter-group">
+            <label class="ip-filter-label">Search</label>
+            <input class="ip-filter-input" id="saFilterSearch" type="text" placeholder="Search mancies…">
+          </div>
+          <button class="ip-filter-clear" id="saClearFilters" type="button">Clear</button>
+        </div>
+
+        <!-- Quest list -->
+        <div class="sa-content-area">
+          <div class="sa-quest-list" id="saQuestList"></div>
+
+          <!-- Quest detail -->
+          <div class="sa-quest-detail" id="saQuestDetail" style="display:none">
+            <button class="ip-detail-back" id="saDetailBack">← Back</button>
+            <div class="sa-detail-name" id="saDetailName"></div>
+            <div class="sa-detail-meta" id="saDetailMeta"></div>
+            <div class="sa-detail-status" id="saDetailStatus"></div>
+            <div class="sa-detail-tabs">
+              <button class="sa-tab active" data-tab="description">Description</button>
+              <button class="sa-tab" data-tab="instructions">Instructions</button>
+              <button class="sa-tab" data-tab="lore">Lore</button>
+              <button class="sa-tab" data-tab="rule">Rules</button>
+              <button class="sa-tab" data-tab="submission">Submission</button>
+            </div>
+            <button class="copy-btn" id="saCopySubmissionBtn" type="button" style="display:none">Copy</button>
+            <div class="sa-tab-content" id="saTabContent"></div>
+          </div>
+        </div>
+
+      </div><!-- /sa-modal-body -->
+    </div><!-- /sa-modal -->
+  </div><!-- /sa-modal-overlay -->
+
   <!-- BOTTOM NAV (mobile) -->
   <nav class="bottom-nav">
     <button class="bnav-btn active" data-view="map"><span class="bnav-icon">🗺️</span>Map</button>
-    <button class="bnav-btn" data-view="detail"><span class="bnav-icon">📜</span>Details</button>
+    <button class="bnav-btn" data-view="detail"><span class="bnav-icon">📜</span>Details</button>    
+    <button class="bnav-btn" data-view="hosted"><span class="bnav-icon">🌀</span>Events</button>    
     <button class="bnav-btn" data-view="search"><span class="bnav-icon">🔍</span>Codex</button>
     <button class="bnav-btn" data-view="influence"><span class="bnav-icon">🔮</span>Influence</button>
-    <button class="bnav-btn" data-view="arcane"><span class="bnav-icon">🌀</span>Arcane</button>
+    <button class="bnav-btn" data-view="arcane"><span class="bnav-icon">🧙‍♂️</span>Arcane</button>
+    <button class="bnav-btn" data-view="supreme"><span class="bnav-icon">✨</span>Supreme</button>
   </nav>
 
 </div>
