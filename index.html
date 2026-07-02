@@ -24,10 +24,10 @@
       </div>
     </div>
     <div class="topbar-actions">
-      <button class="topbar-btn" id="searchBtn" aria-label="Open Mage Codex search">
-        <span class="topbar-btn-icon">🔍</span>
-        <span class="topbar-btn-label">Codex Search</span>
-      </button>
+      <div class="topbar-search-wrap" id="topbarSearchWrap">
+        <span class="topbar-search-icon">🔍</span>
+        <input class="topbar-search-input" id="topbarSearchInput" type="text" placeholder="Codex Search" aria-label="Codex Search" autocomplete="off">
+      </div>
       <button class="topbar-btn" id="influenceNavBtn" aria-label="Open Influence Tracker">
         <span class="topbar-btn-icon">🔮</span>
         <span class="topbar-btn-label">Influence</span>
@@ -62,12 +62,23 @@
 
         <!-- Player section -->
         <div class="sb-section sb-player">
-          <select class="sb-select" id="playerSelect" aria-label="Select player">
-            <option value="" disabled selected>Select a Player</option>
-          </select>
-          <div class="sb-player-meta" id="sbPlayerMeta" style="display:none">
-            <span class="sb-rank" id="sbCurrentRank">—</span>
-            <span class="sb-influence" id="sbInfluence">0 Influence</span>
+          <div class="sb-select-hint" id="selectNameHint">
+            <span class="sb-select-hint-arrow">→</span>
+            <span>Select your name here</span>
+          </div>
+          <div class="sb-player-main">
+            <div class="sb-select-wrap">
+              <select class="sb-select" id="playerSelect" aria-label="Select player">
+                <option value="" disabled selected>Select a Player</option>
+              </select>
+              <div class="sb-select-helper" id="selectNameHelper">
+                Can't find your name? You need to reach the minimum rank of <strong>Initiate</strong> first. If you still can't see your name, contact a mage rep.
+              </div>
+            </div>
+            <div class="sb-player-meta" id="sbPlayerMeta" style="display:none">
+              <span class="sb-rank" id="sbCurrentRank">—</span>
+              <span class="sb-influence" id="sbInfluence">0 Influence</span>
+            </div>
           </div>
         </div>
 
@@ -83,6 +94,9 @@
             <div class="sb-ring-text">
               <div class="sb-ring-pct" id="progressPercent">—</div>
             </div>
+            <button class="sb-ring-info" id="ringInfoBtn" type="button" aria-label="What does this ring show?">i
+              <span class="sb-ring-tooltip">This ring shows the percentage of all rank requirements you've completed across the entire Circle.</span>
+            </button>
           </div>
           <div class="sb-progress-label" id="progressCounts">Select a player</div>
         </div>
@@ -160,6 +174,21 @@
 
         </div><!-- /detail-content -->
       </aside><!-- /detail-panel -->
+
+      <!-- ── MAP LEGEND ── -->
+      <div class="map-legend" id="mapLegend">
+        <button class="map-legend-toggle" id="mapLegendToggle" type="button" aria-label="Toggle legend">
+          <span class="map-legend-toggle-icon">?</span>
+          <span class="map-legend-toggle-label">Legend</span>
+        </button>
+        <div class="map-legend-body" id="mapLegendBody">
+          <div class="map-legend-item"><span class="map-legend-swatch swatch-completed"></span>Completed</div>
+          <div class="map-legend-item"><span class="map-legend-swatch swatch-available"></span>Available</div>
+          <div class="map-legend-item"><span class="map-legend-swatch swatch-locked"></span>Locked</div>
+          <div class="map-legend-item"><span class="map-legend-swatch swatch-current"></span>You Are Here</div>
+          <div class="map-legend-item"><span class="map-legend-swatch swatch-start"></span>Start Here</div>
+        </div>
+      </div>
 
       <!-- Nodes injected here by JS -->
 
@@ -601,7 +630,7 @@
   <!-- BOTTOM NAV (mobile) -->
   <nav class="bottom-nav">
     <button class="bnav-btn active" data-view="map"><span class="bnav-icon">🗺️</span>Map</button>
-    <button class="bnav-btn" data-view="detail"><span class="bnav-icon">📜</span>Details</button>    
+    <button class="bnav-btn" data-view="detail"><span class="bnav-icon">📜</span>Rank Info</button>    
     <button class="bnav-btn" data-view="hosted"><span class="bnav-icon">🌀</span>Events</button>    
     <button class="bnav-btn" data-view="search"><span class="bnav-icon">🔍</span>Codex</button>
     <button class="bnav-btn" data-view="influence"><span class="bnav-icon">🔮</span>Influence</button>
