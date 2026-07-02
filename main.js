@@ -435,6 +435,8 @@ function iconImg(rank,cls='rank-icon-img'){return `<img class="${esc(cls)}" src=
 function renderStatusBar(prog) {
   const player = S.selectedPlayer;
   const metaEl = document.getElementById('sbPlayerMeta');
+  const hintEl = document.getElementById('selectNameHint');
+  if(hintEl) hintEl.classList.toggle('hidden', !!player);
   if(player){
     document.getElementById('sbCurrentRank').textContent = prog.currentRank||'Unranked';
     document.getElementById('sbInfluence').textContent   = `${getInfluence(player)} Influence`;
@@ -478,18 +480,25 @@ function renderNodes(prog) {
   const canvas = document.getElementById('mapCanvas');
   canvas.querySelectorAll('.node').forEach(n=>n.remove());
   const mobile = isMobileView();
+  const firstRank = prog.ranks[0];
+  const showStartBadge = firstRank && firstRank.status !== 'completed';
+  const doneRanks = prog.ranks.filter(r=>r.status==='completed');
+  const currentRankId = doneRanks.length ? doneRanks[doneRanks.length-1].id : null;
   prog.ranks.forEach(rank=>{
     const layout=S.layout.get(rank.id)||{x:50,y:50,px:null,py:null};
     const left = (mobile && layout.px!=null) ? layout.px : layout.x;
     const top  = (mobile && layout.py!=null) ? layout.py : layout.y;
+    const isCurrent = rank.id===currentRankId;
     const node=document.createElement('button');
     node.type='button';
-    node.className=`node node-${rank.status}${rank.status==='available'?' pulse':''}`;
+    node.className=`node node-${rank.status}${rank.status==='available'?' pulse':''}${isCurrent?' node-current':''}`;
     node.id=`node-${rank.id}`;
     node.style.left=`${left}%`;
     node.style.top=`${top}%`;
     node.dataset.rankId=rank.id;
     node.innerHTML=`
+      ${showStartBadge && rank.id===firstRank.id ? '<div class="node-start-badge">Start Here</div>' : ''}
+      ${isCurrent ? '<div class="node-current-badge">You Are Here</div>' : ''}
       <div class="node-header">
         <div class="node-icon-wrap">${iconImg(rank)}</div>
         <div class="node-title-group">
@@ -1365,13 +1374,21 @@ function closeHeModal() {
 }
 
 // ─── SEARCH MODAL — MAGE CODEX ───
-function openSearchModal() {
+function openSearchModal(initialQuery) {
   renderSectionInfo('codexSectionDesc','codexSectionAnnouncement','codexSectionAnnouncementText','codexSectionInfo','codex_modal');
   document.getElementById('searchModal').classList.add('open');
+  if(initialQuery!==undefined){
+    const input=document.getElementById('searchInput');
+    input.value=initialQuery;
+    runSearch(initialQuery);
+    document.getElementById('searchClear').style.display=initialQuery?'':'none';
+  }
   setTimeout(()=>document.getElementById('searchInput').focus(),100);
 }
 function closeSearchModal() {
   document.getElementById('searchModal').classList.remove('open');
+  const topbarInput=document.getElementById('topbarSearchInput');
+  if(topbarInput) topbarInput.value='';
   setBnavActive('map');
 }
 
@@ -1725,11 +1742,31 @@ async function init() {
     const val=e.target.value;
     S.selectedPlayer = val===''?null:S.players[Number(val)];
     S.selectedRankId=null; S.selectedReqName=null;
+    document.getElementById('selectNameHelper').classList.remove('open');
     renderApp();
+  });
+
+  const playerSelectEl=document.getElementById('playerSelect');
+  const selectHelperEl=document.getElementById('selectNameHelper');
+  playerSelectEl.addEventListener('mousedown',()=>selectHelperEl.classList.add('open'));
+  playerSelectEl.addEventListener('focus',()=>selectHelperEl.classList.add('open'));
+  playerSelectEl.addEventListener('blur',()=>selectHelperEl.classList.remove('open'));
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('.sb-select-wrap')) selectHelperEl.classList.remove('open');
   });
 
   document.getElementById('drawerBackdrop').addEventListener('click',closeDrawer);
   document.getElementById('detailPanelClose').addEventListener('click',closeDrawer);
+
+  document.getElementById('mapLegendToggle').addEventListener('click',()=>{
+    document.getElementById('mapLegend').classList.toggle('open');
+  });
+  document.getElementById('ringInfoBtn').addEventListener('click',e=>{
+    e.currentTarget.classList.toggle('tap-open');
+  });
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('.sb-ring-info')) document.getElementById('ringInfoBtn').classList.remove('tap-open');
+  });
 
   // Influence modal
   document.getElementById('ipModalClose').addEventListener('click',closeInfluenceModal);
@@ -1748,7 +1785,13 @@ async function init() {
   document.getElementById('ipClearFilters').addEventListener('click',clearIpFilters);
 
   // Topbar buttons
-  document.getElementById('searchBtn').addEventListener('click',openSearchModal);
+  const topbarSearchInput=document.getElementById('topbarSearchInput');
+  topbarSearchInput.addEventListener('focus',()=>{
+    if(!document.getElementById('searchModal').classList.contains('open')) openSearchModal(topbarSearchInput.value);
+  });
+  topbarSearchInput.addEventListener('input',e=>{
+    if(!document.getElementById('searchModal').classList.contains('open')) openSearchModal(e.target.value);
+  });
   document.getElementById('influenceNavBtn').addEventListener('click',openInfluenceModal);
   document.getElementById('arcaneNavBtn').addEventListener('click',openAmModal);
   document.getElementById('hostedNavBtn').addEventListener('click',openHeModal);
