@@ -1,618 +1,1833 @@
-:root {
-  /* Surfaces */
-  --ink:#0c0910;          /* page background */
-  --ink2:#15101c;         /* deeper recess, modal back */
-  --vellum:#1d1726;       /* card / panel surface */
-  --vellum2:#241c30;      /* raised surface, hover */
+// ─── CONFIG ───
+const SHEET_ID = '1FFEg75S6-HKlN58pMROvtTkBry1FYGrVruPsUbaf4qA';
+const SHEET_NAMES = { 
+  ranks: 'ranks', 
+  reqs: 'reqs', 
+  influenceTasks: 'influence points', 
+  tracker: 'tracker', 
+  layout: 'nodelayout',
+  influenceStat: 'influence stat',
+  arcaneMastery: 'arcane_mastery',
+  hostedEvents: 'hosted_events',
+  sections: 'sections',
+  supremeArts: 'supreme_arts'
+};
+const RANK_ICON_PATH   = 'images/ranks/';
+const REWARD_ICON_PATH = 'images/rewards/';
+const DEFAULT_RANK_ICON   = `${RANK_ICON_PATH}default.png`;
+const DEFAULT_REWARD_ICON = `${REWARD_ICON_PATH}default.png`;
 
-  /* Lines */
-  --hairline:rgba(232,223,208,0.10);
-  --hairline2:rgba(232,223,208,0.18);
+const FALLBACK = {
+  ranks: [
+    { name:'Initiate',   description:'Every great mage begins with a single candle.', rewards:'L7 Pointy Hat; Sparkler', req1:'Offering to Goddess Freyja' },
+    { name:'Apprentice', description:'The foundations of magic take root.',             rewards:'Apprentice Robes; Herb Pouch', req1:'Novice Herbalism', req2:'Novice Potion-making', req3:'Novice Runework' },
+    { name:'Enchanter',  description:'The threads of arcane weave between your fingers.', rewards:'Feather Cape; Eitr Robes', 'influence points':'30', req1:'Advanced Herbalism', req2:'Advanced Potion-making', req3:'Advanced Runework', req4:'The Harrowing', req5:'Here Lies the Abyss', req6:'Horcrux Hunt' },
+    { name:'Archmage',   description:'The apex of mortal mastery.', rewards:'L22 Staff; Embla Hood', 'influence points':'70', req1:'Expert Herbalism', req2:'Expert Potion-making', req3:'Expert Runework' }
+  ],
+  reqs: [],
+  influenceTasks: [
+    { name:'Airbender', description:'Glide from a mountain to the ocean.', points:'2' },
+    { name:'Happy Landing', description:'Fly and land at Spawn.', points:'2' },
+    { name:'Excess Energies', description:'Donate 1 stack of Refined Eitr.', points:'4' }
+  ],
+  tracker: [],
+  nodelayout: [
+    { name:'Initiate',   x:'50', y:'12', conn1:'Apprentice' },
+    { name:'Apprentice', x:'25', y:'35', conn1:'Enchanter' },
+    { name:'Enchanter',  x:'70', y:'35', conn1:'Archmage' },
+    { name:'Archmage',   x:'50', y:'65' }
+  ]
+};
 
-  /* Text */
-  --parchment:#ece3d4;    /* primary text, warm off-white */
-  --rune:#b9aec7;         /* secondary text, muted lavender */
-  --rune-dim:#7d7390;     /* tertiary text */
+const REWARD_ICONS = ['✦','🎩','🪄','🧥','🔮','💎','💣','🧪','🏅','👑'];
 
-  /* Accents */
-  --arcane:#8456c4;       /* primary purple — ink-like, desaturated */
-  --arcane-soft:#a98fd6;  /* lighter purple for small text accents */
-  --arcane-glow:rgba(132,86,196,0.30);
-  --gilt:#caa157;         /* gold leaf — completed / earned */
-  --gilt2:#e0bd7a;        /* brighter gold for hover/active */
-  --gilt-glow:rgba(202,161,87,0.30);
-  --wax:#8c3a3a;          /* oxblood — locked / urgent, used sparingly */
+const SUPREME_WAYS = [
+  { code: 'ke', name: 'Knight Enchanter' },
+  { code: 'aa', name: 'Arcane Alchemist' },
+  { code: 'ds', name: 'Draconic Scholar' },
+  { code: 'hc', name: 'High Conjurer' }
+];
 
-  --topbar-h:56px; --bnav-h:58px;
-  --font-body:'Crimson Pro','Open Sans',serif;
-  --font-ui:'Open Sans',sans-serif;
-  --font-display:'Averia Serif Libre',serif;
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--ink);color:var(--parchment);font-family:var(--font-body);overflow:hidden}
+let S = {
+  ranks:[], reqRegistry:new Map(), influenceTasks:[],
+  players:[], layout:new Map(), connections:[],
+  selectedPlayer:null, selectedRankId:null, selectedReqName:null,
+  selectedReqData:null, activeReqTab:'instruction',
+  activeIpTask:null,
+  influenceStat:[],
+  supremeArts:[],
+  arcaneMastery:[],
+  hostedEvents:[],
+  sections:new Map(),
+  activeAmTab:'description', activeAmQuest:null,
+  activeHeTab:'description', activeHeQuest:null
+};
 
-/* ── APP SHELL ── */
-.app{display:flex;flex-direction:column;height:100dvh}
+// ─── UTILS ───
+const slugify   = v => String(v||'').trim().toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+const esc       = v => String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const normKey   = v => String(v||'').trim().toLowerCase().replace(/\s+/g,' ').replace(/[^\x20-\x7E]/g,'');
+const isTruthy  = v => ['true','yes','y','1','complete','completed','done'].includes(String(v).trim().toLowerCase());
+const splitList = v => String(v||'').split(/[;|\n]+/).map(s=>s.trim()).filter(Boolean);
+const cleanIcon = v => String(v||'').split('/').pop().replace(/[^a-zA-Z0-9._-]/g,'')||'default.png';
 
-/* ── TOPBAR ── */
-.topbar{display:flex;align-items:center;padding:0 24px;min-height:var(--topbar-h);background:var(--ink2);border-bottom:1px solid var(--hairline2);flex-shrink:0;gap:20px;z-index:100;flex-wrap:wrap;position:relative}
-.topbar::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent,var(--gilt-glow) 50%,transparent)}
-.topbar-logo{display:flex;align-items:center;gap:10px;flex-shrink:0}
-.logo-icon{width:28px;height:28px;border:1px solid var(--gilt);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--gilt);position:relative}
-.logo-icon::before{content:'';position:absolute;inset:-4px;border:1px solid var(--hairline2);border-radius:50%}
-.logo-text{font-family:var(--font-display);font-size:17px;font-weight:600;letter-spacing:1px;color:var(--parchment)}
-.topbar-actions{display:flex;align-items:center;gap:26px;flex-shrink:0;margin-left:auto}
-.topbar-btn{display:flex;align-items:center;gap:7px;padding:4px 0;border:none;border-bottom:1px solid transparent;border-radius:0;background:none;color:var(--rune);font-family:var(--font-ui);font-size:12.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;cursor:pointer;transition:color .2s,border-color .2s;white-space:nowrap}
-.topbar-btn:hover{color:var(--gilt2);border-color:var(--gilt)}
-.topbar-btn-icon{font-size:13px;opacity:.8}
-
-/* Topbar middle — welcome text + announcement */
-.topbar-section-info{flex:1 1 280px;min-width:0;display:flex;flex-direction:column;gap:2px;padding:8px 0}
-.topbar-section-desc{font-family:var(--font-body);font-style:italic;font-size:13px;color:var(--rune);line-height:1.4;max-width:520px}
-.topbar-section-announcement{display:flex;align-items:flex-start;gap:6px;font-family:var(--font-ui);font-size:11.5px;font-weight:600;color:var(--gilt2);line-height:1.4;max-width:520px}
-.topbar-section-announcement .section-banner-ann-icon{flex-shrink:0;font-size:12px;filter:saturate(.6)}
-
-/* ── MAIN ── */
-.main{display:flex;flex:1;overflow:hidden;min-height:0;height:0}
-
-/* ── MAP CANVAS ── */
-.map-canvas{flex:1;position:relative;overflow:hidden;min-width:0;background:var(--ink)}
-
-.map-bg-image{position:absolute;inset:0;background-image:url('images/background.png');background-size:cover;background-position:center;z-index:0;filter:saturate(.75) brightness(.8)}
-.map-bg-overlay{position:absolute;inset:0;z-index:1;pointer-events:none;
-  background:
-    radial-gradient(ellipse 70% 60% at 50% 38%,rgba(202,161,87,.08) 0%,transparent 60%),
-    radial-gradient(ellipse at 15% 85%,rgba(12,9,16,.7) 0%,transparent 55%),
-    radial-gradient(ellipse at 85% 85%,rgba(12,9,16,.7) 0%,transparent 55%),
-    linear-gradient(180deg,rgba(12,9,16,.35) 0%,transparent 18%,transparent 80%,rgba(12,9,16,.55) 100%)}
-
-.arcane-circle{position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);width:560px;height:560px;border-radius:50%;border:1px solid rgba(202,161,87,.07);pointer-events:none;z-index:2}
-.arcane-circle::before{content:'';position:absolute;inset:38px;border-radius:50%;border:1px solid rgba(132,86,196,.06)}
-.arcane-circle::after{content:'';position:absolute;inset:76px;border-radius:50%;border:1px solid rgba(202,161,87,.05)}
-.map-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:3}
-
-/* ── PLAYER BAR ── */
-.status-bar{
-  position:absolute;top:0;left:0;right:0;
-  z-index:20;
-  display:flex;align-items:center;justify-content:center;gap:0;
-  background:var(--ink2);
-  border-bottom:1px solid var(--hairline2);
-  box-shadow:0 6px 18px rgba(0,0,0,.4);
-  padding:11px 24px;
-  white-space:nowrap;
-}
-.status-bar::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent,var(--arcane-glow) 50%,transparent)}
-.sb-section{display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 26px}
-.sb-divider{width:1px;height:38px;background:var(--hairline2);flex-shrink:0}
-
-/* Player section */
-.sb-select{background:transparent;border:none;color:var(--parchment);font-family:var(--font-display);font-size:15px;font-weight:600;cursor:pointer;outline:none;text-align:center;padding:0 4px}
-.sb-select option{background:var(--ink2);color:var(--parchment)}
-.sb-player-meta{display:flex;flex-direction:column;align-items:center;gap:2px}
-.sb-rank{font-family:var(--font-display);font-size:12px;color:var(--gilt)}
-.sb-influence{font-family:var(--font-ui);font-size:10.5px;color:var(--rune-dim);letter-spacing:.3px}
-
-/* Progress ring section */
-.sb-progress{flex-direction:row;gap:11px;align-items:center}
-.sb-ring-wrap{position:relative;width:48px;height:48px;display:flex;align-items:center;justify-content:center}
-.sb-ring-svg{width:48px;height:48px}
-.sb-ring-text{position:absolute;display:flex;align-items:center;justify-content:center}
-.sb-ring-pct{font-family:var(--font-display);font-size:13px;font-weight:700;color:var(--gilt)}
-.sb-progress-label{font-family:var(--font-ui);font-size:10.5px;color:var(--rune-dim);text-align:center;max-width:100px;white-space:normal;line-height:1.4}
-.ring-bg{fill:none;stroke:var(--hairline2);stroke-width:7}
-.ring-fill{fill:none;stroke:var(--gilt);stroke-width:7;stroke-linecap:round;stroke-dasharray:264;stroke-dashoffset:264;transform:rotate(-90deg);transform-origin:50px 50px;transition:stroke-dashoffset .6s ease}
-
-/* Next rank section */
-.sb-next-rank{font-family:var(--font-display);font-size:14px;color:var(--parchment)}
-.sb-next-desc{font-family:var(--font-ui);font-size:10.5px;color:var(--rune-dim)}
-.sb-era{display:flex;flex-direction:column;align-items:center;gap:4px}
-.sb-era-label{font-family:var(--font-ui);font-size:10.5px;color:var(--rune-dim);letter-spacing:.5px;text-transform:uppercase}
-.sb-era-value{font-family:var(--font-display);font-size:14px;color:var(--gilt)}
-.sb-badge{font-size:16px;letter-spacing:0;}
-
-/* ── FLOATING DETAIL PANEL ── */
-.detail-panel{
-  position:absolute;top:96px;right:32px;
-  z-index:20;
-  width:420px;max-height:75vh;
-  background:var(--vellum);
-  border:1px solid var(--hairline2);
-  border-radius:3px;
-  box-shadow:0 16px 50px rgba(0,0,0,.55);
-  display:flex;flex-direction:column;
-  overflow:hidden;
-}
-/* Manuscript corner brackets — the signature element */
-.detail-panel::before,.detail-panel::after{
-  content:'';position:absolute;width:22px;height:22px;pointer-events:none;z-index:2;
-  border-color:var(--gilt);opacity:.75;
-}
-.detail-panel::before{top:8px;left:8px;border-top:1.5px solid;border-left:1.5px solid}
-.detail-panel::after{bottom:8px;right:8px;border-bottom:1.5px solid;border-right:1.5px solid}
-.detail-panel-close{display:none;position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:50%;border:1px solid var(--hairline2);background:var(--vellum2);color:var(--rune);font-size:11px;cursor:pointer;align-items:center;justify-content:center;z-index:3;transition:border-color .2s,color .2s}
-.detail-panel-close:hover{border-color:var(--gilt);color:var(--gilt)}
-
-/* Empty state */
-.detail-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:48px 20px;color:var(--rune-dim)}
-.detail-empty-icon{font-size:24px;opacity:.5;color:var(--gilt)}
-.detail-empty-text{font-family:var(--font-display);font-size:14px;text-align:center;line-height:1.6;opacity:.7}
-
-/* Detail content */
-.detail-content{display:flex;flex-direction:column;gap:15px;padding:20px;overflow-y:auto;max-height:75vh}
-.detail-header{display:flex;gap:12px;align-items:flex-start;padding-bottom:14px;border-bottom:1px solid var(--hairline)}
-.detail-icon{width:40px;height:40px;border-radius:4px;background:var(--vellum2);border:1px solid var(--hairline2);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--gilt);flex-shrink:0;overflow:hidden}
-.detail-title{font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--parchment);letter-spacing:.3px}
-.detail-subtitle{font-family:var(--font-ui);font-size:11px;color:var(--rune-dim);font-style:normal;margin-top:3px;letter-spacing:.3px}
-.detail-lore{font-family:var(--font-body);font-size:14.5px;color:var(--rune);font-style:italic;line-height:1.7}
-.detail-section-title{font-family:var(--font-ui);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--rune-dim);margin-bottom:6px;border-bottom:1px solid var(--hairline);padding-bottom:6px}
-
-/* Requirements */
-.req-list{display:flex;flex-direction:column;gap:3px}
-.req-row{display:flex;align-items:flex-start;gap:8px;font-family:var(--font-body);font-size:14px;line-height:1.35;padding:4px 0}
-.req-row.done{color:var(--gilt)}
-.req-row.pending{color:var(--rune)}
-.req-circle{width:14px;height:14px;border-radius:50%;border:1.5px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:8px;flex-shrink:0;margin-top:2px}
-.req-name{color:inherit;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.ip-badge{font-family:var(--font-ui);font-size:10.5px;font-weight:600;color:var(--arcane-soft);background:rgba(132,86,196,.12);border:1px solid rgba(132,86,196,.3);border-radius:3px;padding:1px 6px;font-style:normal;cursor:pointer}
-.req-button{width:100%;border:1px solid transparent;border-radius:4px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background .2s,border-color .2s,color .2s}
-.req-button:hover,.req-button.selected{background:var(--vellum2);border-color:var(--hairline2);color:var(--gilt2)}
-
-/* Requirement detail card */
-.requirement-detail-card{border:1px solid var(--hairline2);border-radius:4px;background:var(--ink2);padding:13px;display:flex;flex-direction:column;gap:9px}
-.requirement-detail-name{font-family:var(--font-display);font-size:14px;color:var(--parchment)}
-.requirement-detail-type{font-family:var(--font-ui);font-size:11px;font-weight:600;letter-spacing:.4px;color:var(--arcane-soft)}
-.requirement-detail-description{font-family:var(--font-body);font-size:13.5px;color:var(--rune);font-style:italic;line-height:1.55}
-
-/* Req tabs */
-.req-tabs{display:flex;gap:4px;border-bottom:1px solid var(--hairline);padding-bottom:9px;margin-top:4px}
-.req-tab{flex:1;padding:6px 8px;border:1px solid var(--hairline2);border-radius:3px;background:transparent;color:var(--rune-dim);font-family:var(--font-ui);font-size:11.5px;font-weight:600;letter-spacing:.3px;cursor:pointer;transition:all .2s}
-.req-tab:hover{border-color:var(--arcane);color:var(--arcane-soft)}
-.req-tab.active{background:rgba(132,86,196,.16);border-color:var(--arcane);color:var(--arcane-soft)}
-.req-tab-content{font-family:var(--font-body);font-size:13.5px;color:var(--rune);line-height:1.6;min-height:40px;padding-top:5px;overflow-y:auto;max-height:200px}
-.req-tab-content:empty::before{content:'No content available.';color:var(--rune-dim);font-style:italic}
-
-/* Reward list */
-.reward-list{display:flex;flex-direction:column;gap:8px}
-.reward-item{display:flex;align-items:flex-start;gap:11px;padding:9px;border:1px solid var(--hairline);border-radius:4px;background:var(--ink2);transition:border-color .2s}
-.reward-item:hover{border-color:var(--gilt-glow)}
-.reward-item-img{width:34px;height:34px;border-radius:4px;background:var(--vellum2);border:1px solid var(--hairline2);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--gilt);flex-shrink:0;overflow:hidden}
-.reward-item-img img{width:100%;height:100%;object-fit:cover;border-radius:4px}
-.reward-item-info{flex:1;min-width:0}
-.reward-item-name{font-family:var(--font-display);font-size:13px;color:var(--parchment);margin-bottom:3px}
-.reward-item-desc{font-family:var(--font-body);font-size:12px;color:var(--rune-dim);line-height:1.4;font-style:italic}
-
-/* ── NODE CARDS ── */
-.node{position:absolute;width:max-content;height:64px;background:var(--vellum);border:1px solid var(--hairline2);border-radius:4px;cursor:pointer;
-  appearance:none;color:inherit;font:inherit;text-align:left;
-  transform:translate(-50%,-50%);z-index:4;
-  transition:transform .2s,border-color .2s,box-shadow .2s}
-.node:hover{transform:translate(-50%,calc(-50% - 2px))}
-.node:focus-visible{outline:1.5px solid var(--gilt);outline-offset:3px}
-.node.selected{outline:1.5px solid var(--gilt);z-index:10}
-.node-completed{border-color:rgba(202,161,87,.55);box-shadow:0 4px 16px rgba(202,161,87,.1)}
-.node-available{border-color:rgba(132,86,196,.55);box-shadow:0 4px 18px rgba(132,86,196,.16)}
-.node-locked{border-color:var(--hairline2);opacity:.55}
-.node-locked:hover{opacity:.78}
-.node-available.pulse{animation:pulseBorder 2.4s ease-in-out infinite}
-.node-neutral{border-color:var(--hairline2);opacity:.85}
-@keyframes pulseBorder{0%,100%{box-shadow:0 4px 18px rgba(132,86,196,.16)}50%{box-shadow:0 4px 28px rgba(132,86,196,.32)}}
-.node-icon-wrap{width:48px;height:48px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;background:var(--vellum2);border:1px solid var(--hairline2);color:var(--gilt);overflow:hidden}
-.node-header{height:100%;box-sizing:border-box;padding:8px 14px 8px 8px;display:flex;align-items:center;gap:10px;white-space:nowrap}
-.node-title-group{flex:1;white-space:nowrap}
-.node-title{font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--gilt);line-height:1.2;margin-bottom:3px;white-space:nowrap}
-.node-status{display:flex;align-items:center;gap:5px;font-family:var(--font-ui);font-size:10.5px;font-weight:600;letter-spacing:.4px;text-transform:uppercase}
-.status-dot{width:5px;height:5px;border-radius:50%}
-.s-completed .status-dot{background:var(--gilt)}
-.s-completed{color:var(--gilt)}
-.s-available .status-dot{background:var(--arcane);animation:dotPulse 1.6s ease-in-out infinite}
-.s-available{color:var(--arcane-soft)}
-.s-locked .status-dot{background:var(--rune-dim)}
-.s-locked{color:var(--rune-dim)}
-.s-neutral .status-dot{background:var(--rune-dim)}
-.s-neutral{color:var(--rune-dim)}
-@keyframes dotPulse{0%,100%{opacity:1}50%{opacity:.3}}
-.node-body{padding:8px 11px 10px}
-.node-checklist{display:flex;flex-direction:column;gap:3px}
-.check-item{display:flex;align-items:flex-start;gap:6px;font-family:var(--font-body);font-size:12.5px;color:var(--rune-dim);line-height:1.3}
-.check-item.done{color:var(--rune)}
-.check-icon{font-size:10px;margin-top:3px;flex-shrink:0}
-.check-icon.c{color:var(--gilt)}
-.check-icon.x{color:var(--rune-dim)}
-
-/* ── PATHS ── */
-.path-completed{filter:drop-shadow(0 0 3px currentColor);stroke-dasharray:none;opacity:.85}
-.path-available{filter:drop-shadow(0 0 3px currentColor);animation:pathFlow 3s linear infinite;stroke-dasharray:7 9}
-.path-locked{stroke-dasharray:3 7;opacity:.22}
-.path-neutral{stroke-dasharray:3 7;opacity:.18}
-@keyframes pathFlow{to{stroke-dashoffset:-48}}
-
-/* ── ICON IMAGES ── */
-.sidebar-rank-icon-img,.rank-icon-img,.detail-rank-icon-img{width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit}
-.detail-icon img,.detail-rank-icon-img{width:100%!important;height:100%!important;object-fit:cover!important;display:block!important;border-radius:inherit}
-
-/* ── FORMATTED TEXT ── */
-.detail-lore ul,.requirement-detail-description ul,.ip-desc ul,.ip-notes ul,.req-tab-content ul{margin:6px 0 6px 18px;padding-left:0;list-style-type:disc}
-.detail-lore li,.requirement-detail-description li,.ip-desc li,.ip-notes li,.req-tab-content li{margin-bottom:4px;line-height:1.4;color:var(--rune)}
-
-/* ══════════════════════════════
-   INFLUENCE MODAL — expanded
-══════════════════════════════ */
-.ip-modal-overlay{display:none;position:fixed;inset:0;z-index:500;background:rgba(5,3,8,.8);align-items:center;justify-content:center;padding:16px}
-.ip-modal-overlay.open{display:flex}
-.ip-modal{background:var(--ink2);border:1px solid var(--hairline2);border-radius:5px;width:100%;max-width:1100px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 70px rgba(0,0,0,.6);position:relative}
-.ip-modal::before,.ip-modal::after{content:'';position:absolute;width:24px;height:24px;pointer-events:none;z-index:2;border-color:var(--gilt);opacity:.6}
-.ip-modal::before{top:10px;left:10px;border-top:1.5px solid;border-left:1.5px solid}
-.ip-modal::after{bottom:10px;right:10px;border-bottom:1.5px solid;border-right:1.5px solid}
-.ip-modal-header{padding:18px 24px 14px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:10px;flex-shrink:0}
-.ip-modal-title{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-size:19px;font-weight:600;color:var(--parchment);flex:1}
-.ip-modal-icon{font-size:19px}
-.ip-modal-sub{font-family:var(--font-ui);font-size:12px;font-weight:600;color:var(--arcane-soft);background:rgba(132,86,196,.13);border:1px solid rgba(132,86,196,.3);border-radius:3px;padding:4px 10px;white-space:nowrap}
-.ip-modal-close{min-width:26px;height:26px;border-radius:50%;border:1px solid var(--hairline2);background:var(--vellum);color:var(--rune);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .2s,color .2s;flex-shrink:0}
-.ip-modal-close:hover{border-color:var(--gilt);color:var(--gilt)}
-
-.ip-modal-body{display:flex;flex-direction:column;overflow:hidden;flex:1}
-
-/* Overview stats */
-.ip-overview{display:flex;gap:0;border-bottom:1px solid var(--hairline);flex-shrink:0}
-.ip-stat{flex:1;padding:17px 12px;text-align:center;border-right:1px solid var(--hairline)}
-.ip-stat:last-child{border-right:none}
-.ip-stat-val{font-family:var(--font-display);font-size:25px;font-weight:700;color:var(--arcane-soft)}
-.ip-stat-max{color:var(--rune)}
-.ip-stat-rem{color:var(--gilt)}
-.ip-stat-pct{color:var(--arcane-soft)}
-.ip-stat-lbl{font-family:var(--font-ui);font-size:10.5px;color:var(--rune-dim);letter-spacing:1px;text-transform:uppercase;margin-top:3px}
-
-/* Achievement tracks */
-.ip-tracks-section{padding:16px 24px 13px;border-bottom:1px solid var(--hairline);flex-shrink:0}
-.ip-section-title{font-family:var(--font-ui);font-size:10.5px;font-weight:700;letter-spacing:2px;color:var(--rune-dim);text-transform:uppercase;margin-bottom:11px}
-.ip-tracks{display:flex;flex-wrap:wrap;gap:10px}
-.ip-track{flex:1;min-width:160px;background:var(--vellum);border:1px solid var(--hairline);border-radius:4px;padding:11px 13px}
-.ip-track-name{font-family:var(--font-display);font-size:13px;color:var(--parchment);margin-bottom:7px}
-.ip-track-bar-wrap{height:4px;background:var(--hairline2);border-radius:2px;overflow:hidden;margin-bottom:5px}
-.ip-track-bar{height:100%;background:var(--gilt);border-radius:2px;transition:width .5s ease}
-.ip-track-meta{font-family:var(--font-ui);font-size:10.5px;color:var(--rune-dim)}
-
-/* Filters */
-.ip-filters{display:flex;gap:10px;padding:11px 24px;border-bottom:1px solid var(--hairline);flex-shrink:0;flex-wrap:wrap;align-items:flex-end}
-.ip-filter-group{display:flex;flex-direction:column;gap:4px;min-width:120px}
-.ip-filter-label{font-family:var(--font-ui);font-size:10.5px;color:var(--rune-dim);letter-spacing:.6px;text-transform:uppercase}
-.ip-filter-select,.ip-filter-input{background:var(--vellum);border:1px solid var(--hairline2);border-radius:3px;color:var(--parchment);font-family:var(--font-ui);font-size:13px;padding:6px 9px;outline:none;transition:border-color .2s}
-.ip-filter-select:focus,.ip-filter-input:focus{border-color:var(--arcane)}
-.ip-filter-input::placeholder{color:var(--rune-dim)}
-.ip-filter-clear{background:rgba(132,86,196,.16);border:1px solid rgba(132,86,196,.3);color:var(--arcane);font-family:var(--font-ui);font-size:12px;font-weight:700;padding:8px 14px;border-radius:4px;cursor:pointer;align-self:flex-end;transition:all .15s}
-.ip-filter-clear:hover{background:rgba(132,86,196,.24);border-color:rgba(132,86,196,.45)}
-.ip-filter-clear:active{transform:translateY(1px)}
-.ip-filter-clear:hover{background:rgba(132,86,196,.24);border-color:rgba(132,86,196,.45)}
-.ip-filter-clear:active{transform:translateY(1px)}
-
-/* Content area: task list + detail */
-.ip-content-area{display:flex;flex:1;overflow:hidden;min-height:0}
-.ip-task-list{flex:1;overflow-y:auto;padding:10px 16px 14px;min-width:0}
-.ip-task-detail{width:340px;border-left:1px solid var(--hairline);overflow-y:auto;padding:18px;flex-shrink:0;background:var(--ink)}
-
-/* Task rows */
-.ip-row{display:flex;align-items:flex-start;gap:11px;padding:10px 9px;border-radius:4px;border:1px solid transparent;cursor:pointer;transition:background .15s}
-.ip-row:hover{background:var(--vellum)}
-.ip-row.ip-row-active{background:var(--vellum2);border-color:rgba(132,86,196,.35)}
-.ip-row+.ip-row{border-top:1px solid var(--hairline)}
-.ip-check{width:19px;height:19px;border-radius:50%;border:1.5px solid var(--rune-dim);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;margin-top:2px;color:var(--rune-dim)}
-.ip-done .ip-check{border-color:var(--gilt);color:var(--gilt);background:rgba(202,161,87,.12)}
-.ip-info{flex:1;min-width:0}
-.ip-name{font-family:var(--font-display);font-size:13.5px;color:var(--parchment);margin-bottom:4px}
-.ip-done .ip-name{color:var(--rune)}
-.ip-desc{font-family:var(--font-body);font-size:13px;color:var(--rune);line-height:1.5;font-style:italic}
-.ip-notes{font-family:var(--font-body);font-size:11px;color:var(--rune-dim);margin-top:4px;font-style:italic}
-.ip-pts{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--gilt);flex-shrink:0;min-width:28px;text-align:right;margin-top:1px}
-.ip-done .ip-pts{color:var(--gilt2)}
-.ip-repeat{font-family:var(--font-ui);font-size:10.5px;font-weight:600;color:var(--arcane-soft);background:rgba(132,86,196,.1);border:1px solid rgba(132,86,196,.25);border-radius:3px;padding:1px 7px;white-space:nowrap;align-self:flex-start;margin-top:4px;flex-shrink:0}
-.ip-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
-.ip-tag{font-family:var(--font-ui);font-size:10.5px;color:var(--rune-dim);background:var(--vellum2);border:1px solid var(--hairline2);border-radius:3px;padding:1px 7px}
-.sa-detail-meta,.am-detail-meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-.sa-detail-status{margin-bottom:16px}
-
-.ip-category-group{margin-bottom:22px}
-.ip-category-group:last-child{margin-bottom:0}
-.ip-category-header{font-family:var(--font-ui);font-size:12px;font-weight:700;color:var(--arcane-soft);letter-spacing:1.3px;text-transform:uppercase;padding:13px 9px 7px;border-bottom:1px solid var(--hairline);margin-bottom:7px}
-
-/* Task detail panel */
-.ip-detail-back{background:none;border:none;color:var(--arcane-soft);font-family:var(--font-ui);font-size:13px;font-weight:600;cursor:pointer;padding:0;margin-bottom:16px;display:block}
-.ip-detail-back:hover{color:var(--gilt2)}
-.copy-btn{background:rgba(132,86,196,.14);border:1px solid rgba(132,86,196,.32);color:var(--arcane);font-family:var(--font-ui);font-size:11.5px;font-weight:700;padding:8px 12px;border-radius:4px;cursor:pointer;transition:all .15s;margin-bottom:14px}
-.copy-btn:hover{background:rgba(132,86,196,.22);border-color:rgba(132,86,196,.5)}
-.copy-btn:active{transform:translateY(1px)}
-.ip-detail-name{font-family:var(--font-display);font-size:19px;color:var(--parchment);margin-bottom:9px}
-.ip-detail-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:13px}
-.ip-detail-badge{font-family:var(--font-ui);font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:3px;border:1px solid var(--hairline2);color:var(--rune-dim);background:var(--vellum)}
-.ip-detail-badge.pts{color:var(--gilt);border-color:rgba(202,161,87,.32);background:rgba(202,161,87,.1)}
-.ip-detail-badge.cat{color:var(--arcane-soft);border-color:rgba(132,86,196,.32);background:rgba(132,86,196,.1)}
-.ip-detail-badge.rep{color:var(--rune)}
-.ip-detail-desc{font-family:var(--font-body);font-size:14.5px;color:var(--rune);line-height:1.7;margin-bottom:13px}
-.ip-detail-notes-lbl{font-family:var(--font-ui);font-size:10.5px;font-weight:700;color:var(--rune-dim);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:7px}
-.ip-detail-notes{font-family:var(--font-body);font-size:13px;color:var(--rune-dim);line-height:1.6;font-style:italic}
-.ip-detail-progress{margin-top:15px;padding-top:15px;border-top:1px solid var(--hairline);font-family:var(--font-ui);font-size:13px;color:var(--rune-dim)}
-
-/* ══════════════════════════════
-   SEARCH MODAL — Mage Codex
-══════════════════════════════ */
-.search-modal-overlay{display:none;position:fixed;inset:0;z-index:600;background:rgba(5,3,8,.8);align-items:flex-start;justify-content:center;padding:60px 16px 16px}
-.search-modal-overlay.open{display:flex}
-.search-modal{background:var(--ink2);border:1px solid var(--hairline2);border-radius:5px;width:100%;max-width:680px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 70px rgba(0,0,0,.6);position:relative}
-.search-modal::before,.search-modal::after{content:'';position:absolute;width:20px;height:20px;pointer-events:none;z-index:2;border-color:var(--gilt);opacity:.6}
-.search-modal::before{top:9px;left:9px;border-top:1.5px solid;border-left:1.5px solid}
-.search-modal::after{bottom:9px;right:9px;border-bottom:1.5px solid;border-right:1.5px solid}
-.search-modal-header{padding:16px 18px 13px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:10px;flex-shrink:0}
-.search-modal-title{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--parchment);flex:1}
-.search-modal-icon{font-size:19px}
-.search-modal-close{min-width:26px;height:26px;border-radius:50%;border:1px solid var(--hairline2);background:var(--vellum);color:var(--rune);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .2s,color .2s}
-.search-modal-close:hover{border-color:var(--gilt);color:var(--gilt)}
-.search-input-wrap{position:relative;padding:13px 18px;border-bottom:1px solid var(--hairline);flex-shrink:0;display:flex;align-items:center;gap:9px}
-.search-input-icon{font-size:15px;color:var(--rune-dim);flex-shrink:0}
-.search-input{flex:1;background:transparent;border:none;color:var(--parchment);font-family:var(--font-display);font-size:16px;outline:none}
-.search-input::placeholder{color:var(--rune-dim)}
-.search-clear{background:none;border:none;color:var(--rune-dim);font-size:13px;cursor:pointer;padding:4px 6px;border-radius:3px;flex-shrink:0}
-.search-clear:hover{color:var(--parchment)}
-.search-results{overflow-y:auto;padding:13px}
-.search-empty{display:flex;flex-direction:column;align-items:center;gap:11px;padding:44px 20px;color:var(--rune-dim)}
-.search-empty-icon{font-size:24px;opacity:.5;color:var(--gilt)}
-.search-empty-text{font-family:var(--font-display);font-size:14px;text-align:center;opacity:.7}
-.search-group{margin-bottom:22px}
-.search-group:last-child{margin-bottom:0}
-.search-group-title{font-family:var(--font-ui);font-size:10.5px;font-weight:700;color:var(--arcane-soft);letter-spacing:1.8px;text-transform:uppercase;padding:0 5px 9px;border-bottom:1px solid var(--hairline);margin-bottom:9px}
-.search-result-item{display:flex;align-items:flex-start;gap:11px;padding:9px;border-radius:4px;cursor:pointer;border:1px solid transparent;transition:background .15s,border-color .2s}
-.search-result-item:hover{background:var(--vellum);border-color:var(--hairline2)}
-.search-result-icon{width:30px;height:30px;border-radius:4px;background:var(--vellum2);border:1px solid var(--hairline2);color:var(--gilt);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
-.search-result-info{flex:1;min-width:0}
-.search-result-name{font-family:var(--font-display);font-size:14px;color:var(--parchment);margin-bottom:2px}
-.search-result-sub{font-family:var(--font-body);font-size:12px;color:var(--rune-dim);line-height:1.4}
-.search-result-badge{font-family:var(--font-ui);font-size:10.5px;font-weight:600;color:var(--arcane-soft);background:rgba(132,86,196,.1);border:1px solid rgba(132,86,196,.25);border-radius:3px;padding:1px 6px;flex-shrink:0;align-self:flex-start}
-.search-no-results{text-align:center;padding:34px;color:var(--rune-dim);font-style:italic;font-family:var(--font-display)}
-
-/* ── DRAWER BACKDROP ── */
-.drawer-backdrop{display:none;position:fixed;inset:0;z-index:30;background:rgba(5,3,8,.55)}
-.drawer-backdrop.visible{display:block}
-
-/* ── BOTTOM NAV (mobile only) ── */
-.bottom-nav{display:none;height:calc(var(--bnav-h) + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px);background:var(--ink2);border-top:1px solid var(--hairline2);flex-shrink:0;align-items:stretch;position:relative;z-index:50}
-.bnav-btn{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:none;background:none;cursor:pointer;color:var(--rune-dim);font-family:var(--font-ui);font-size:10.5px;font-weight:600;letter-spacing:.4px;transition:color .2s;padding:0}
-.bnav-icon{font-size:18px}
-.bnav-btn.active{color:var(--gilt)}
-.bnav-btn.active::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:28px;height:2px;background:var(--gilt);border-radius:0 0 2px 2px}
-
-/* ════════════════════════
-   MOBILE ≤ 899px
-════════════════════════ */
-@media(max-width:899px){
-  .topbar{padding-top:env(safe-area-inset-top,0px);min-height:calc(var(--topbar-h) + env(safe-area-inset-top,0px))}
-  .bottom-nav{display:flex}
-  .topbar-btn-label{display:none}
-  .topbar-btn{padding:8px 6px;min-width:36px;justify-content:center}
-  .topbar-section-info{display:none}
-  .topbar-actions{gap:18px}
-
-  /* Status bar — compact single row, no wrap */
-  .status-bar{
-    top:0;left:0;right:0;border-radius:0;
-    padding-top:calc(8px + env(safe-area-inset-top,0px));
-    flex-wrap:nowrap;justify-content:space-between;gap:6px;
-    padding-left:14px;padding-right:14px;padding-bottom:8px;
-    overflow-x:auto;
+function parseFormatting(text) {
+  if (!text) return '';
+  const lines = esc(text).split(/\r?\n/);
+  let html = '', inList = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const listMatch = line.match(/^\s*([-*+•])\s+(.*)$/);
+    if (listMatch) {
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += `<li>${listMatch[2]}</li>`;
+    } else {
+      if (inList) { html += '</ul>'; inList = false; }
+      html += line;
+      if (i < lines.length - 1 && !lines[i+1]?.match(/^\s*([-*+•])\s+/)) html += '<br>';
+    }
   }
-  .sb-divider{display:none}
-  .sb-section{padding:0 6px;flex-shrink:0}
-  .sb-player{flex:1 1 auto;min-width:0;align-items:flex-start}
-  .sb-select{font-size:13.5px;padding:0;text-align:left}
-  .sb-player-meta{align-items:flex-start}
-  .sb-progress{order:3}
-  .sb-next{align-items:flex-end;text-align:right}
-  .sb-next-rank{font-size:13px}
+  if (inList) html += '</ul>';
+  return html.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>');
+}
 
-  /* Detail panel — bottom drawer */
-  .detail-panel{
-    position:fixed;
-    top:auto;right:0;left:0;
-    bottom:calc(var(--bnav-h) + env(safe-area-inset-bottom,0px));
-    width:100%;max-height:70vh;
-    border-radius:10px 10px 0 0;
-    border-left:none;border-right:none;border-bottom:none;
-    transform:translateY(102%);
-    transition:transform .3s cubic-bezier(.4,0,.2,1);
-    z-index:40;
+function getField(row, ...names) {
+  if (!row) return '';
+  const entries = Object.entries(row);
+  for (const name of names) {
+    const want = normKey(name);
+    const found = entries.find(([k]) => normKey(k) === want);
+    if (found && found[1] !== undefined) return found[1];
   }
-  .detail-panel::before{display:none}
-  .detail-panel::after{content:'';display:block;position:static;width:36px;height:4px;border:none;border-radius:2px;background:var(--hairline2);margin:10px auto 0;flex-shrink:0;opacity:1}
-  .detail-panel.drawer-open{transform:translateY(0)}
-  .detail-panel-close{display:flex}
-  .detail-content{max-height:calc(70vh - 20px)}
-
-  .node{height:56px}
-  .node-title{font-size:13px}
-  .node-header{padding:7px 11px 7px 7px}
-  .node-icon-wrap{width:40px;height:40px}
-  .node-body{padding:7px 9px 8px}
-  .check-item{font-size:11px}
-  .req-row{padding:6px 0}
-  .req-circle{width:17px;height:17px}
-
-  /* Influence modal — full screen */
-  .ip-modal{max-width:100%;max-height:90vh;border-radius:10px 10px 0 0}
-  .ip-modal-overlay{align-items:flex-end;padding:0}
-  .ip-task-detail{display:none!important}
-  .ip-tracks{flex-direction:column}
-  .ip-overview{flex-wrap:wrap}
-  .ip-stat{min-width:50%;border-bottom:1px solid var(--hairline)}
-
-  /* Search modal — full screen */
-  .search-modal{max-width:100%;max-height:95vh;border-radius:10px 10px 0 0}
-  .search-modal-overlay{align-items:flex-end;padding:0}
-
-  /* Arcane Mastery modal — full screen, consistent with other modals at this breakpoint */
-  .am-modal{max-width:100%;max-height:90vh;border-radius:10px 10px 0 0}
-  .am-modal-overlay{align-items:flex-end;padding:0}
-  .am-overview{grid-template-columns:repeat(2,1fr)}
-  .am-filters{padding:11px 12px}
-  .am-detail-tabs{gap:6px}
-  .am-tab{padding:7px 11px;font-size:12px}
+  return '';
 }
 
-@media(max-width:380px){
-  .logo-text{display:none}
-  .sb-next{display:none}
-  .sb-rank{font-size:11px}
-
+// ─── CSV ───
+function parseCsv(csv) {
+  if (csv.charCodeAt(0) === 0xFEFF) csv = csv.slice(1);
+  const rows=[]; let cur='',row=[],inQ=false;
+  for (let i=0;i<csv.length;i++) {
+    const c=csv[i],n=csv[i+1];
+    if (c==='"'&&inQ&&n==='"'){cur+='"';i++;}
+    else if(c==='"'){inQ=!inQ;}
+    else if(c===','&&!inQ){row.push(cur);cur='';}
+    else if((c==='\n'||c==='\r')&&!inQ){
+      if(c==='\r'&&n==='\n')i++;
+      row.push(cur);
+      if(row.some(x=>x.trim()))rows.push(row);
+      row=[];cur='';
+    } else cur+=c;
+  }
+  row.push(cur);
+  if(row.some(x=>x.trim()))rows.push(row);
+  if(!rows.length)return[];
+  const headers=rows[0].map(h=>h.trim().replace(/^\uFEFF/,'').replace(/[^\x20-\x7E\u00C0-\uFFFF]/g,'').trim());
+  return rows.slice(1).map(cells=>headers.reduce((o,h,i)=>{o[h]=(cells[i]||'').trim();return o},{}));
 }
 
-/* Partial / Started progress styling for task list */
-.ip-row.ip-started .ip-check {
-  border-color: var(--arcane-soft);
-  color: var(--arcane-soft);
-  background: rgba(132,86,196,0.12);
-}
-.ip-row.ip-started .ip-name {
-  color: var(--rune);
-}
+const csvUrl = sheet => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?${new URLSearchParams({tqx:'out:csv',sheet})}`;
 
-/* Smooth flash highlight for search auto-scroll */
-@keyframes rowFlash {
-  0% { background: rgba(132,86,196,0.35); border-color: rgba(132,86,196,0.6); }
-  100% { background: transparent; border-color: transparent; }
-}
-.ip-row-highlight {
-  animation: rowFlash 2.5s ease-out;
+async function loadSheet(name, fallback=[], optional=false) {
+  try {
+    const r = await fetch(csvUrl(name),{cache:'no-store'});
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const rows = parseCsv(await r.text());
+    return (rows.length||optional) ? rows : fallback;
+  } catch(e) {
+    console.warn(`[loadSheet] "${name}" failed:`,e.message);
+    return fallback;
+  }
 }
 
-/* ══════════════════════════════════════════
-   SECTION INFO (inside modals)
-══════════════════════════════════════════ */
-.am-section-info, .sa-section-info{padding:11px 24px;border-bottom:1px solid var(--hairline);display:flex;flex-direction:column;gap:6px;flex-shrink:0;background:var(--ink)}
-.am-section-desc, .sa-section-desc{font-family:var(--font-body);font-style:italic;font-size:13px;color:var(--rune);line-height:1.5}
-.am-section-announcement, .sa-section-announcement{display:flex;align-items:flex-start;gap:7px;font-family:var(--font-ui);font-size:11.5px;font-weight:600;color:var(--gilt2);line-height:1.45}
+async function loadAll() {
+  const [ranks,reqs,influenceTasks,tracker,nodelayout,influenceStat,arcaneMastery,hostedEvents,sections,supremeArts] = await Promise.all([
+    loadSheet(SHEET_NAMES.ranks,         FALLBACK.ranks),
+    loadSheet(SHEET_NAMES.reqs,          FALLBACK.reqs, true),
+    loadSheet(SHEET_NAMES.influenceTasks,FALLBACK.influenceTasks, true),
+    loadSheet(SHEET_NAMES.tracker,       FALLBACK.tracker),
+    loadSheet(SHEET_NAMES.layout,        FALLBACK.nodelayout),
+    loadSheet(SHEET_NAMES.influenceStat, [], true),
+    loadSheet(SHEET_NAMES.arcaneMastery, [], true),
+    loadSheet(SHEET_NAMES.hostedEvents,  [], true),
+    loadSheet(SHEET_NAMES.sections,      [], true),
+    loadSheet(SHEET_NAMES.supremeArts,   [], true)
+  ]);
+  return {ranks,reqs,influenceTasks,tracker,nodelayout,influenceStat,arcaneMastery,hostedEvents,sections,supremeArts};
+}
 
-/* ══════════════════════════════════════════
-   ARCANE MASTERY BADGE (on req rows)
-══════════════════════════════════════════ */
-.am-badge{color:var(--gilt)!important;background:rgba(202,161,87,.12)!important;border-color:rgba(202,161,87,.3)!important}
+// ─── PARSERS ───
+function buildReqRegistry(rows) {
+  return new Map(rows.map(row=>{
+    const name=getField(row,'name');
+    if(!name) return null;
+    return [normKey(name),{
+      name,
+      type:getField(row,'type')||'Requirement',
+      description:getField(row,'description','Description'),
+      instruction:getField(row,'instruction','instructions'),
+      rules:getField(row,'rules'),
+      lore:getField(row,'lore','flavor')
+    }];
+  }).filter(Boolean));
+}
 
-/* ══════════════════════════════════════════
-   ARCANE MASTERY MODAL
-══════════════════════════════════════════ */
-.am-modal-overlay{display:none;position:fixed;inset:0;z-index:500;background:rgba(5,3,8,.8);align-items:center;justify-content:center;padding:16px}
-.am-modal-overlay.open{display:flex}
-.am-modal{background:var(--ink2);border:1px solid var(--hairline2);border-radius:5px;width:100%;max-width:780px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 70px rgba(0,0,0,.6);position:relative}
-.am-modal::before,.am-modal::after{content:'';position:absolute;width:22px;height:22px;pointer-events:none;z-index:2;border-color:var(--gilt);opacity:.6}
-.am-modal::before{top:10px;left:10px;border-top:1.5px solid;border-left:1.5px solid}
-.am-modal::after{bottom:10px;right:10px;border-bottom:1.5px solid;border-right:1.5px solid}
-.am-modal-header{padding:18px 24px 14px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:10px;flex-shrink:0}
-.am-modal-title{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-size:19px;font-weight:600;color:var(--parchment);flex:1}
-.am-modal-icon{font-size:19px}
-.am-modal-sub{font-family:var(--font-ui);font-size:12px;font-weight:600;color:var(--gilt);background:rgba(202,161,87,.12);border:1px solid rgba(202,161,87,.3);border-radius:3px;padding:4px 10px;white-space:nowrap}
-.am-modal-close{min-width:26px;height:26px;border-radius:50%;border:1px solid var(--hairline2);background:var(--vellum);color:var(--rune);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .2s,color .2s;flex-shrink:0}
-.am-modal-close:hover{border-color:var(--gilt);color:var(--gilt)}
+function parseRank(row, index) {
+  const name = getRankName(row);
+  const reqs = [];
+  Object.keys(row).forEach(key=>{
+    const m=normKey(key).match(/^req\s*(\d+)$/);
+    if(!m) return;
+    const rName=row[key].trim();
+    if(!rName) return;
+    const reg=S.reqRegistry.get(normKey(rName));
+    reqs.push({name:rName,description:reg?.description||'',type:reg?.type||'',instruction:reg?.instruction||'',rules:reg?.rules||'',lore:reg?.lore||'',isInfluence:false,isArcaneMastery:false,isSupremeArts:false,_order:parseInt(m[1],10)});
+  });
+  const ipVal=parseInt(getField(row,'influence points','influence'),10);
+  if(ipVal>0) reqs.push({name:`${ipVal} Influence Points`,description:`Earn at least ${ipVal} influence points.`,type:'Influence',isInfluence:true,threshold:ipVal,_order:999});
+  const amVal=parseInt(getField(row,'arcane_mastery','arcane mastery'),10);
+  if(amVal>0) reqs.push({name:`${amVal} Arcane Mastery`,description:`Complete any ${amVal} Arcane Mastery quests.`,type:'Arcane Mastery',isArcaneMastery:true,threshold:amVal,_order:998});
+  SUPREME_WAYS.forEach((way,idx)=>{
+    const saVal=parseInt(getField(row,`supreme_arts_${way.code}`),10);
+    if(saVal>0) reqs.push({name:`${saVal} ${way.name}`,description:`Complete any ${saVal} ${way.name} quests.`,type:`Supreme Arts - ${way.name}`,isSupremeArtsByType:true,supremeWayCode:way.code,supremeWayName:way.name,threshold:saVal,_order:997-idx});
+  });
+  reqs.sort((a,b)=>a._order-b._order);
 
-.am-modal-body{display:flex;flex-direction:column;overflow:hidden;flex:1}
+  const rewards = [];
+  for(let i=1;i<=20;i++){
+    const rName = getField(row,`reward${i}`);
+    if(!rName) {
+      if(i===1){
+        const plain=splitList(getField(row,'rewards','reward'));
+        if(plain.length) { plain.forEach(p=>rewards.push({name:p,description:'',image:''})); }
+      }
+      break;
+    }
+    rewards.push({
+      name:rName,
+      description:getField(row,`reward${i}_description`,`reward${i} description`),
+      image:getField(row,`reward${i}_image`,`reward${i} image`)
+    });
+  }
 
-/* Overview stats */
-.am-overview{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--hairline);border-bottom:1px solid var(--hairline);flex-shrink:0}
-#heOverview{grid-template-columns:repeat(2,minmax(0,1fr));}
-#heOverview .am-stat{padding:16px 10px;}
-.am-stat{background:var(--ink2);padding:13px 8px;text-align:center}
-.am-stat-val{font-family:var(--font-display);font-size:23px;font-weight:700;color:var(--parchment)}
-.am-stat-lbl{font-family:var(--font-ui);font-size:10.5px;color:var(--rune-dim);letter-spacing:1px;text-transform:uppercase;margin-top:3px}
-.am-stat-total{color:var(--rune)}
-.am-stat-rem{color:var(--arcane-soft)}
-.am-stat-pct{color:var(--gilt)}
+  return {
+    id:slugify(name||`rank-${index+1}`),order:index,name,
+    description:getField(row,'description','rank description')||'',
+    lore:getField(row,'lore','flavor')||'',
+    image:getField(row,'image')||'',
+    rewards,requirements:reqs
+  };
+}
 
-/* Filters */
-.am-filters{display:flex;gap:12px;padding:13px 16px;border-bottom:1px solid var(--hairline);flex-shrink:0;flex-wrap:wrap;align-items:flex-end}
+function parseCoord(v){const n=Number(v);return Number.isFinite(n)?Math.min(90,Math.max(10,n)):50;}
 
-/* Content area */
-.am-content-area{flex:1;overflow:hidden;display:flex;flex-direction:column}
+function parseLayoutAndConnections(rows) {
+  const layout=new Map(),connections=[];
+  rows.forEach(row=>{
+    const name=getField(row,'name','rank')||Object.values(row)[0]||'';
+    if(!name) return;
+    const id=slugify(name);
+    const hasPx=getField(row,'px')!=='' && getField(row,'py')!=='';
+    layout.set(id,{
+      x:parseCoord(getField(row,'x')),
+      y:parseCoord(getField(row,'y')),
+      px:hasPx?parseCoord(getField(row,'px')):null,
+      py:hasPx?parseCoord(getField(row,'py')):null,
+      icon:getField(row,'icon')||`${id}.png`
+    });
+    Object.keys(row).forEach(key=>{
+      if(!/^conn\d+$/i.test(normKey(key))) return;
+      const target=row[key].trim();
+      if(target) connections.push({from:id,to:slugify(target)});
+    });
+  });
+  return {layout,connections};
+}
 
-/* Quest list */
-.am-quest-list{flex:1;overflow-y:auto;padding:9px 0}
-.am-quest-row{display:flex;align-items:center;gap:13px;padding:13px 17px;cursor:pointer;border-bottom:1px solid var(--hairline);transition:background .15s}
-.am-quest-row:hover{background:var(--vellum)}
-.am-quest-row.am-done .am-quest-check{color:var(--gilt);border-color:var(--gilt);background:rgba(202,161,87,.12)}
-.am-quest-check{width:27px;height:27px;border-radius:50%;border:1.5px solid var(--hairline2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--rune-dim);flex-shrink:0;transition:all .2s}
-.am-quest-info{flex:1;min-width:0}
-.am-quest-name{font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--parchment)}
-.am-quest-row.am-done .am-quest-name{color:var(--gilt2)}
-.am-quest-brief{font-family:var(--font-body);font-size:12px;color:var(--rune-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic}
-.am-quest-arrow{color:var(--rune-dim);font-size:17px;flex-shrink:0}
+function buildSectionsMap(rows) {
+  const map = new Map();
+  rows.forEach(row => {
+    const section = normKey(getField(row, 'section'));
+    if (!section) return;
+    map.set(section, {
+      description:  getField(row, 'description'),
+      announcement: getField(row, 'announcement'),
+      active:       isTruthy(getField(row, 'announcement toggle', 'announcement_toggle', 'anouncement toogle'))
+    });
+  });
+  return map;
+}
 
-/* Quest detail */
-.am-quest-detail{flex:1;overflow-y:auto;padding:18px}
-.am-detail-name{font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--parchment);margin-bottom:7px}
-.am-detail-status{font-family:var(--font-ui);font-size:12.5px;font-weight:600;margin-bottom:15px;padding:4px 11px;border-radius:3px;display:inline-block}
-.am-detail-done{color:var(--gilt);background:rgba(202,161,87,.12);border:1px solid rgba(202,161,87,.3)}
-.am-detail-pending{color:var(--rune-dim);background:var(--vellum);border:1px solid var(--hairline2)}
+function getSection(key) {
+  return S.sections.get(normKey(key)) || {description:'', announcement:'', active:false};
+}
 
-/* Tabs */
-.am-detail-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:15px;border-bottom:1px solid var(--hairline);padding-bottom:11px}
-.am-tab{padding:6px 13px;border-radius:3px;border:1px solid transparent;background:none;color:var(--rune-dim);font-family:var(--font-ui);font-size:11.5px;font-weight:600;cursor:pointer;transition:all .15s}
-.am-tab[data-tab="submission"]{color:var(--arcane);border-color:rgba(132,86,196,.12)}
-.am-tab[data-tab="submission"]:hover{color:var(--arcane);border-color:rgba(132,86,196,.25)}
-.am-tab.active{background:rgba(202,161,87,.14);border-color:rgba(202,161,87,.35);color:var(--gilt)}
-.am-tab[data-tab="submission"].active{background:rgba(132,86,196,.18);border-color:rgba(132,86,196,.35);color:var(--arcane-soft)}
-.am-tab-content{font-family:var(--font-body);font-size:13.5px;color:var(--rune);line-height:1.7;white-space:pre-wrap}
+function renderSectionInfo(descId, annId, annTextId, wrapId, sectionKey) {
+  const s = getSection(sectionKey);
+  const wrap = document.getElementById(wrapId);
+  const descEl = document.getElementById(descId);
+  const annEl = document.getElementById(annId);
+  const annTextEl = document.getElementById(annTextId);
+  if (!wrap) return;
+  const hasDesc = !!s.description;
+  const hasAnn = s.active && !!s.announcement;
+  wrap.style.display = (hasDesc || hasAnn) ? '' : 'none';
+  if (descEl) { descEl.textContent = s.description; descEl.style.display = hasDesc ? '' : 'none'; }
+  if (annEl) annEl.style.display = hasAnn ? '' : 'none';
+  if (annTextEl) annTextEl.textContent = s.announcement;
+}
 
-/* ══════════════════════════════════════════
-   SUPERME ARTS MODAL
-══════════════════════════════════════════ */
-.sa-modal-overlay{display:none;position:fixed;inset:0;z-index:500;background:rgba(5,3,8,.8);align-items:center;justify-content:center;padding:16px}
-.sa-modal-overlay.open{display:flex}
-.sa-modal{background:var(--ink2);border:1px solid var(--hairline2);border-radius:5px;width:100%;max-width:780px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 70px rgba(0,0,0,.6);position:relative}
-.sa-modal::before,.sa-modal::after{content:'';position:absolute;width:22px;height:22px;pointer-events:none;z-index:2;border-color:var(--gilt);opacity:.6}
-.sa-modal::before{top:10px;left:10px;border-top:1.5px solid;border-left:1.5px solid}
-.sa-modal::after{bottom:10px;right:10px;border-bottom:1.5px solid;border-right:1.5px solid}
-.sa-modal-header{padding:18px 24px 14px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:10px;flex-shrink:0}
-.sa-modal-title{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-size:19px;font-weight:600;color:var(--parchment);flex:1}
-.sa-modal-icon{font-size:19px}
-.sa-modal-sub{font-family:var(--font-ui);font-size:12px;font-weight:600;color:var(--gilt);background:rgba(202,161,87,.12);border:1px solid rgba(202,161,87,.3);border-radius:3px;padding:4px 10px;white-space:nowrap}
-.sa-modal-close{min-width:26px;height:26px;border-radius:50%;border:1px solid var(--hairline2);background:var(--vellum);color:var(--rune);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .2s,color .2s;flex-shrink:0}
-.sa-modal-close:hover{border-color:var(--gilt);color:var(--gilt)}
+// ─── ARCANE MASTERY HELPERS ───
+function getAmDoneCount(player) {
+  if (!player) return 0;
+  return S.arcaneMastery.filter(q => isTruthy(getField(player, getField(q, 'name')))).length;
+}
 
-.sa-modal-body{display:flex;flex-direction:column;overflow:hidden;flex:1}
+function amQuestDone(player, quest) {
+  if (!player) return false;
+  return isTruthy(getField(player, getField(quest, 'name')));
+}
 
-/* Overview stats */
-.sa-overview{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--hairline);border-bottom:1px solid var(--hairline);flex-shrink:0}
-.sa-stat{background:var(--ink2);padding:13px 8px;text-align:center}
-.sa-stat-val{font-family:var(--font-display);font-size:23px;font-weight:700;color:var(--parchment)}
-.sa-stat-lbl{font-family:var(--font-ui);font-size:10.5px;color:var(--rune-dim);letter-spacing:1px;text-transform:uppercase;margin-top:3px}
-.sa-stat-total{color:var(--rune)}
-.sa-stat-rem{color:var(--arcane-soft)}
-.sa-stat-pct{color:var(--gilt)}
+function applyData(data) {
+  S.reqRegistry    = buildReqRegistry(data.reqs);
+  S.influenceTasks = data.influenceTasks;
+  S.ranks          = data.ranks.map((r,i)=>parseRank(r,i)).filter(r=>r.name);
+  S.players        = data.tracker;
+  S.influenceStat  = data.influenceStat || [];
+  S.arcaneMastery  = data.arcaneMastery || [];
+  S.hostedEvents   = data.hostedEvents || [];
+  S.supremeArts    = data.supremeArts || [];
+  S.sections       = buildSectionsMap(data.sections || []);
+  const {layout,connections} = parseLayoutAndConnections(data.nodelayout);
+  S.layout      = layout;
+  S.connections = connections.length ? connections : S.ranks.slice(1).map((r,i)=>({from:S.ranks[i].id,to:r.id}));
+}
 
-/* Filters */
-.sa-filters{display:flex;gap:12px;padding:13px 16px;border-bottom:1px solid var(--hairline);flex-shrink:0;flex-wrap:wrap;align-items:flex-end}
+// ─── SUPREME ARTS HELPERS ───
+function getSaDoneCount(player) {
+  if (!player) return 0;
+  return S.supremeArts.filter(q => isTruthy(getField(player, getField(q, 'name')))).length;
+}
 
-/* Content area */
-.sa-content-area{flex:1;overflow:hidden;display:flex;flex-direction:column}
+function saQuestDone(player, quest) {
+  if (!player) return false;
+  return isTruthy(getField(player, getField(quest, 'name')));
+}
 
-/* Quest list */
-.sa-quest-list{flex:1;overflow-y:auto;padding:9px 0}
-.sa-quest-row{display:flex;align-items:center;gap:13px;padding:13px 17px;cursor:pointer;border-bottom:1px solid var(--hairline);transition:background .15s}
-.sa-quest-row:hover{background:var(--vellum)}
-.sa-quest-row.sa-done .sa-quest-check{color:var(--gilt);border-color:var(--gilt);background:rgba(202,161,87,.12)}
-.sa-quest-check{width:27px;height:27px;border-radius:50%;border:1.5px solid var(--hairline2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--rune-dim);flex-shrink:0;transition:all .2s}
-.sa-quest-info{flex:1;min-width:0}
-.sa-quest-name{font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--parchment)}
-.sa-quest-row.sa-done .sa-quest-name{color:var(--gilt2)}
-.sa-quest-brief{font-family:var(--font-body);font-size:12px;color:var(--rune-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic}
-.sa-quest-arrow{color:var(--rune-dim);font-size:17px;flex-shrink:0}
+function getSaDoneCountByWay(player, wayName) {
+  if (!player) return 0;
+  return S.supremeArts.filter(q => {
+    const types = getSupremeTypes(q);
+    const hasWay = types.some(t => normKey(t) === normKey(wayName));
+    return hasWay && saQuestDone(player, q);
+  }).length;
+}
 
-/* Quest detail */
-.sa-quest-detail{flex:1;overflow-y:auto;padding:18px}
-.sa-detail-name{font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--parchment);margin-bottom:7px}
-.sa-detail-status{font-family:var(--font-ui);font-size:12.5px;font-weight:600;margin-bottom:15px;padding:4px 11px;border-radius:3px;display:inline-block}
-.sa-detail-done{color:var(--gilt);background:rgba(202,161,87,.12);border:1px solid rgba(202,161,87,.3)}
-.sa-detail-pending{color:var(--rune-dim);background:var(--vellum);border:1px solid var(--hairline2)}
+function getSupremeEarned(player, task) {
+  const row = getPlayerSupremeStatRow(player);
+  if (!row) return 0;
+  const tName = getField(task, 'name');
+  const val = getField(row, tName);
+  const parsed = parseInt(val, 10);
+  return isNaN(parsed) ? 0 : parsed;
+}
 
-/* Tabs */
-.sa-detail-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:15px;border-bottom:1px solid var(--hairline);padding-bottom:11px}
-.sa-tab{padding:6px 13px;border-radius:3px;border:1px solid transparent;background:none;color:var(--rune-dim);font-family:var(--font-ui);font-size:11.5px;font-weight:600;cursor:pointer;transition:all .15s}
-.sa-tab[data-tab="submission"]{color:var(--arcane);border-color:rgba(132,86,196,.12)}
-.sa-tab[data-tab="submission"]:hover{color:var(--arcane);border-color:rgba(132,86,196,.25)}
-.sa-tab.active{background:rgba(202,161,87,.14);border-color:rgba(202,161,87,.35);color:var(--gilt)}
-.sa-tab[data-tab="submission"].active{background:rgba(132,86,196,.18);border-color:rgba(132,86,196,.35);color:var(--arcane-soft)}
-.sa-tab-content{font-family:var(--font-body);font-size:13.5px;color:var(--rune);line-height:1.7;white-space:pre-wrap}
+function getPlayerSupremeStatRow(player) {
+  if (!player || !S.supremeArts.length) return null;
+  const pName = normKey(getPlayerName(player));
+  return S.supremeArts.find(row => {
+    const rowName = getField(row, 'Player Name', 'player', 'name');
+    return normKey(rowName) === pName;
+  });
+}
+
+// ─── INFLUENCE STAT ROW MATCHERS ───
+function getPlayerInfluenceStatRow(player) {
+  if (!player || !S.influenceStat.length) return null;
+  const pName = normKey(getPlayerName(player));
+  return S.influenceStat.find(row => {
+    const rowName = getField(row, 'Player Name', 'player', 'name');
+    return normKey(rowName) === pName;
+  });
+}
+
+function getTaskEarnedPoints(player, task) {
+  const row = getPlayerInfluenceStatRow(player);
+  if (!row) return 0;
+  const tName = getField(task, 'name');
+  const val = getField(row, tName);
+  const parsed = parseInt(val, 10);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+// ─── BOTTOM NAVIGATION HELPER ───
+function setBnavActive(view) {
+  document.querySelectorAll('.bnav-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === view);
+  });
+}
+
+// ─── PLAYER LOGIC ───
+const getPlayerName = p => getField(p,'Player Name','player','name')||'Unknown';
+const getInfluence  = p => parseInt(getField(p,'Influence Points','influence')||'0',10);
+
+function getRankName(row) {
+  const byField = getField(row,'name','rank name','rank');
+  if (byField) return byField;
+  return Object.values(row||{})[0] || '';
+}
+
+function reqDone(player, req) {
+  if(!player) return false;
+  if(req.isInfluence) return getInfluence(player)>=req.threshold;
+  if(req.isArcaneMastery) return getAmDoneCount(player)>=req.threshold;
+  if(req.isSupremeArtsByType) return getSaDoneCountByWay(player,req.supremeWayName)>=req.threshold;
+  return isTruthy(getField(player,req.name));
+}
+
+function rankCompleted(rank, player) {
+  if(!player) return false;
+  return rank.requirements.length>0 && rank.requirements.every(r=>reqDone(player,r));
+}
+
+function rankStatus(rank, player, completedIds) {
+  if(!player) return 'neutral';
+  if(rankCompleted(rank,player)) return 'completed';
+  const incoming=S.connections.filter(c=>c.to===rank.id);
+  const prereqOk=incoming.length===0||incoming.every(c=>completedIds.has(c.from));
+  return prereqOk?'available':'locked';
+}
+
+function getProgress(player) {
+  if(!player) {
+    const ranked=S.ranks.map(r=>({...r,status:'neutral'}));
+    return {ranks:ranked,completedRequirements:0,totalRequirements:0,percent:0,currentRank:null,nextRank:null,highestRemaining:null,completedIds:new Set()};
+  }
+  const allReqNames=[...new Set(S.ranks.flatMap(r=>r.requirements.map(q=>q.name)))];
+  const completedIds=new Set(S.ranks.filter(r=>rankCompleted(r,player)).map(r=>r.id));
+  const ranked=S.ranks.map(r=>({...r,status:rankStatus(r,player,completedIds)}));
+  const doneRanks=ranked.filter(r=>r.status==='completed');
+  const doneReqCount=allReqNames.filter(n=>{
+    const req=S.ranks.flatMap(r=>r.requirements).find(r=>r.name===n);
+    return req?reqDone(player,req):false;
+  }).length;
+  return {
+    ranks:ranked,
+    completedRequirements:doneReqCount,
+    totalRequirements:allReqNames.length,
+    percent:allReqNames.length?Math.round(doneReqCount/allReqNames.length*100):0,
+    currentRank:doneRanks[doneRanks.length-1]?.name||getField(player,'Ranking','rank')||'Unranked',
+    nextRank:ranked.find(r=>r.status==='available')||ranked.find(r=>r.status!=='completed'),
+    highestRemaining:[...ranked].reverse().find(r=>r.status!=='completed'),
+    completedIds
+  };
+}
+
+// ─── ICONS ───
+function getIconSrc(rank){
+  const img=(rank.image||'').trim();
+  if(img) return /^https?:\/\//i.test(img) ? img : `${RANK_ICON_PATH}${cleanIcon(img)}`;
+  const l=S.layout.get(rank.id);
+  return `${RANK_ICON_PATH}${cleanIcon(l?.icon||`${rank.id}.png`)}`;
+}
+function iconImg(rank,cls='rank-icon-img'){return `<img class="${esc(cls)}" src="${esc(getIconSrc(rank))}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_RANK_ICON}'">`;}
+
+// ─── RENDER STATUS BAR ───
+function renderStatusBar(prog) {
+  const player = S.selectedPlayer;
+  const metaEl = document.getElementById('sbPlayerMeta');
+  if(player){
+    document.getElementById('sbCurrentRank').textContent = prog.currentRank||'Unranked';
+    document.getElementById('sbInfluence').textContent   = `${getInfluence(player)} Influence`;
+    metaEl.style.display = '';
+  } else {
+    metaEl.style.display = 'none';
+  }
+  const pct = prog.percent;
+  document.getElementById('progressPercent').textContent = player ? `${pct}%` : '—';
+  document.getElementById('ringFill').style.strokeDashoffset = player ? String(264-(264*pct/100)) : '264';
+  document.getElementById('progressCounts').textContent = player
+    ? `${prog.completedRequirements} / ${prog.totalRequirements} Complete`
+    : 'Select a player';
+  document.getElementById('nextRankName').textContent = player
+    ? (prog.nextRank?.name || 'All Complete')
+    : '—';
+  document.getElementById('nextRankDesc').textContent = player
+    ? (prog.nextRank ? `${prog.nextRank.requirements.filter(r=>!reqDone(player,r)).length} Requirements Remaining` : 'The Circle is Complete')
+    : '—';
+  document.getElementById('sbDuelWin').textContent = player
+    ? (isTruthy(getField(player,'Mage Duel','mage duel')) ? '✓' : '✕')
+    : '—';
+  document.getElementById('sbEraCount').textContent = player
+    ? (getField(player,'Multi Era Count','multi era count','MultiEraCount')||'0')
+    : '—';
+}
+
+function renderSelector() {
+  const sel = document.getElementById('playerSelect');
+  const current = S.selectedPlayer ? S.players.indexOf(S.selectedPlayer) : -1;
+  sel.innerHTML = `<option value="" disabled${current===-1?' selected':''}>Select a Player</option>`
+    + S.players.map((p,i)=>`<option value="${i}"${i===current?' selected':''}>${esc(getPlayerName(p))}</option>`).join('');
+}
+
+// ─── RENDER NODES ───
+function isMobileView(){ return window.innerWidth < 900; }
+
+const statusLabel = s => s==='completed'?'Completed':s==='available'?'Available':s==='neutral'?'View Info':'Locked';
+
+function renderNodes(prog) {
+  const canvas = document.getElementById('mapCanvas');
+  canvas.querySelectorAll('.node').forEach(n=>n.remove());
+  const mobile = isMobileView();
+  prog.ranks.forEach(rank=>{
+    const layout=S.layout.get(rank.id)||{x:50,y:50,px:null,py:null};
+    const left = (mobile && layout.px!=null) ? layout.px : layout.x;
+    const top  = (mobile && layout.py!=null) ? layout.py : layout.y;
+    const node=document.createElement('button');
+    node.type='button';
+    node.className=`node node-${rank.status}${rank.status==='available'?' pulse':''}`;
+    node.id=`node-${rank.id}`;
+    node.style.left=`${left}%`;
+    node.style.top=`${top}%`;
+    node.dataset.rankId=rank.id;
+    node.innerHTML=`
+      <div class="node-header">
+        <div class="node-icon-wrap">${iconImg(rank)}</div>
+        <div class="node-title-group">
+          <div class="node-title">${esc(rank.name)}</div>
+          <div class="node-status s-${rank.status}"><span class="status-dot"></span>${statusLabel(rank.status)}</div>
+        </div>
+      </div>`;
+    node.addEventListener('click',()=>{
+      selectNode(rank.id);
+      if(window.innerWidth<900) openDrawer();
+    });
+    canvas.appendChild(node);
+  });
+}
+
+// ─── DRAW PATHS ───
+function drawPaths(prog=getProgress(S.selectedPlayer)) {
+  const canvas=document.getElementById('mapCanvas');
+  const svg=document.getElementById('pathSvg');
+  const rect=canvas.getBoundingClientRect();
+  if(!rect.width||!rect.height) return;
+  function center(id){const el=document.getElementById(`node-${id}`);if(!el)return null;const r=el.getBoundingClientRect();return{x:r.left-rect.left+r.width/2,y:r.top-rect.top+r.height/2};}
+  function pStatus(conn){
+    const f=prog.ranks.find(r=>r.id===conn.from),t=prog.ranks.find(r=>r.id===conn.to);
+    if(f?.status==='completed'&&t?.status==='completed') return 'completed';
+    if(f?.status==='completed'&&t?.status==='available')  return 'available';
+    if(f?.status==='neutral'||t?.status==='neutral')      return 'neutral';
+    return 'locked';
+  }
+  const colors={completed:'#caa157',available:'#8456c4',locked:'#3a3344',neutral:'#3a3344'};
+  svg.innerHTML=S.connections.map(conn=>{
+    const a=center(conn.from),b=center(conn.to);
+    if(!a||!b) return '';
+    const cpx=a.x+(b.x-a.x)*0.5,st=pStatus(conn);
+    return `<path d="M${a.x},${a.y} C${cpx},${a.y} ${cpx},${b.y} ${b.x},${b.y}" fill="none" stroke="${colors[st]}" stroke-width="2.5" class="path-${st}" stroke-linecap="round"/>`;
+  }).join('');
+}
+
+// ─── DETAIL PANEL ───
+function renderReqRow(req, player, index) {
+  const done=reqDone(player,req);
+  const sel=S.selectedReqName===req.name;
+  let badge = '';
+  if(req.isInfluence) badge = ` <span class="ip-badge">🔮 ${getInfluence(player)} / ${req.threshold}</span>`;
+  if(req.isArcaneMastery) badge = ` Mancies` + ` <span class="ip-badge am-badge">🧙‍♂️ ${getAmDoneCount(player)} / ${req.threshold}</span>`;
+  if(req.isSupremeArtsByType) badge = ` Arts` + ` <span class="ip-badge sa-badge">✨ ${getSaDoneCountByWay(player,req.supremeWayName)} / ${req.threshold}</span>`;
+  return `<button type="button" class="req-row req-button ${done?'done':'pending'}${sel?' selected':''}" data-req-index="${index}">
+    <div class="req-circle">${done?'✓':'○'}</div>
+    <div class="req-name">${esc(req.name)}${badge}</div>
+  </button>`;
+}
+
+function renderRewardItem(reward, index) {
+  const imgSrc = reward.image ? `${REWARD_ICON_PATH}${cleanIcon(reward.image)}` : '';
+  const imgHtml = imgSrc
+    ? `<img src="${esc(imgSrc)}" alt="" loading="lazy" onerror="this.onerror=null;this.style.display='none';this.parentElement.innerHTML='${REWARD_ICONS[index%REWARD_ICONS.length]}';">`
+    : REWARD_ICONS[index%REWARD_ICONS.length];
+  return `<div class="reward-item">
+    <div class="reward-item-img">${imgHtml}</div>
+    <div class="reward-item-info">
+      <div class="reward-item-name">${esc(reward.name)}</div>
+      ${reward.description?`<div class="reward-item-desc">${parseFormatting(reward.description)}</div>`:''}
+    </div>
+  </div>`;
+}
+
+function showDetailPanel(show) {
+  document.getElementById('detailEmpty').style.display   = show ? 'none' : '';
+  document.getElementById('detailContent').style.display = show ? ''     : 'none';
+}
+
+function selectNode(id) {
+  const prog=getProgress(S.selectedPlayer);
+  const rank=prog.ranks.find(r=>r.id===id)||prog.nextRank||prog.ranks[0];
+  if(!rank) return;
+  if(S.selectedRankId!==rank.id) S.selectedReqName=null;
+  S.selectedRankId=rank.id;
+
+  showDetailPanel(true);
+  document.getElementById('detailIcon').innerHTML    = iconImg(rank,'detail-rank-icon-img');
+  document.getElementById('detailTitle').textContent = rank.name.toUpperCase();
+  document.getElementById('detailSub').textContent   = statusLabel(rank.status);
+  document.getElementById('detailLore').innerHTML    = parseFormatting(rank.description||rank.lore||'');
+
+  document.getElementById('detailReqs').innerHTML = rank.requirements.map((r,i)=>renderReqRow(r,S.selectedPlayer,i)).join('')||'<div class="req-row pending">No requirements.</div>';
+  document.getElementById('detailRewards').innerHTML = rank.rewards.map(renderRewardItem).join('')||'<div style="color:var(--text3);font-size:12px;font-style:italic">No rewards listed.</div>';
+
+  document.getElementById('reqDetailCard').style.display='none';
+  document.querySelectorAll('.node').forEach(n=>n.classList.toggle('selected',n.dataset.rankId===rank.id));
+
+  document.querySelectorAll('.req-button').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const idx=Number(btn.dataset.reqIndex);
+      const req=rank.requirements[idx];
+      if(!req) return;
+      if(req.isInfluence){openInfluenceModal();return;}
+      if(req.isArcaneMastery){openAmModal();return;}
+      if(req.isSupremeArtsByType){openSaModal(req.supremeWayName);return;}
+      S.selectedReqName=req.name;
+      S.selectedReqData=req;
+      S.activeReqTab='instruction';
+      document.querySelectorAll('.req-button').forEach(b=>b.classList.toggle('selected',Number(b.dataset.reqIndex)===idx));
+      renderReqDetail(req);
+    });
+  });
+
+  renderReqDetail(rank.requirements.find(r=>r.name===S.selectedReqName)||null);
+}
+
+// ─── REQ DETAILS & TABS ───
+function renderReqDetail(req) {
+  const card=document.getElementById('reqDetailCard');
+  if(!req){card.style.display='none';return;}
+  card.style.display='';
+
+  document.getElementById('requirementDetailName').textContent=req.name;
+  document.getElementById('requirementDetailType').textContent=req.type?`Type: ${req.type}`:'';
+  document.getElementById('requirementDetailDescription').innerHTML=parseFormatting(req.description||(req?'No description.':''));
+
+  const hasTabs = req.instruction||req.rules||req.lore;
+  const tabsEl = document.getElementById('reqTabs');
+  const contentEl = document.getElementById('reqTabContent');
+
+  if(hasTabs) {
+    tabsEl.style.display='';
+    renderReqTab(req, S.activeReqTab);
+
+    tabsEl.querySelectorAll('.req-tab').forEach(btn=>{
+      btn.classList.toggle('active', btn.dataset.tab===S.activeReqTab);
+      btn.onclick=()=>{
+        S.activeReqTab=btn.dataset.tab;
+        tabsEl.querySelectorAll('.req-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===S.activeReqTab));
+        renderReqTab(req, S.activeReqTab);
+      };
+    });
+  } else {
+    tabsEl.style.display='none';
+    contentEl.innerHTML='';
+  }
+}
+
+function renderReqTab(req, tab) {
+  const contentEl=document.getElementById('reqTabContent');
+  const val = tab==='instruction'?req.instruction:tab==='rules'?req.rules:req.lore;
+  contentEl.innerHTML = val ? parseFormatting(val) : '<span style="color:var(--text3);font-style:italic">No content available.</span>';
+}
+
+// ─── INFLUENCE MODAL (EXPANDED DASHBOARD) ───
+function getIpTypes(task) {
+  const t1=getField(task,'type1');
+  const t2=getField(task,'type2');
+  const t3=getField(task,'type3');
+  return [t1,t2,t3].map(t => String(t || '').trim()).filter(Boolean);
+}
+
+function getIpTaskStats(player) {
+  const tasks = S.influenceTasks;
+  const totalMax = tasks.reduce((s,t)=>s+parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10),0);
+  const earned = player ? getInfluence(player) : 0; 
+  const done = player ? tasks.filter(t => {
+    const earnedPts = getTaskEarnedPoints(player, t);
+    const maxPts = parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10);
+    return earnedPts >= maxPts;
+  }).length : 0;
+  return {earned, totalMax, remaining:Math.max(0,totalMax-earned), pct:totalMax?Math.round(earned/totalMax*100):0, done, total:tasks.length};
+}
+
+function buildTrackData() {
+  const trackMap = {};
+  S.influenceTasks.forEach(t=>{
+    getIpTypes(t).forEach(type=>{
+      if(!trackMap[type]) trackMap[type]={name:type,earned:0,max:0};
+      const pts = parseInt(getField(t,'points','Points')||'0',10);
+      const maxPts = parseInt(getField(t,'max point','max points')||pts,10);
+      trackMap[type].max += maxPts;
+    });
+  });
+
+  if(S.selectedPlayer) {
+    S.influenceTasks.forEach(t=>{
+      const earnedPts = getTaskEarnedPoints(S.selectedPlayer, t);
+      getIpTypes(t).forEach(type=>{
+        if(trackMap[type]) {
+          trackMap[type].earned += earnedPts;
+        }
+      });
+    });
+  }
+  return Object.values(trackMap);
+}
+
+// ─── SUPREME ARTS MODAL (EXPANDED DASHBOARD) ───
+
+function getSupremeTypes(supreme) {
+  const t1=getField(supreme,'type1');
+  const t2=getField(supreme,'type2');
+  const t3=getField(supreme,'type3');
+  return [t1,t2,t3].map(t => String(t || '').trim()).filter(Boolean);
+}
+
+function getAmTypes(quest) {
+  const t1=getField(quest,'type1');
+  const t2=getField(quest,'type2');
+  const t3=getField(quest,'type3');
+  return [t1,t2,t3].map(t => String(t || '').trim()).filter(Boolean);
+}
+
+function buildTrackSupremeData() {
+  const trackMap = {};
+  S.supremeArts.forEach(q => {
+    getSupremeTypes(q).forEach(type => {
+      if(!trackMap[type]) trackMap[type] = {name:type,earned:0,max:0};
+      trackMap[type].max += 1;
+      if (S.selectedPlayer && saQuestDone(S.selectedPlayer, q)) {
+        trackMap[type].earned += 1;
+      }
+    });
+  });
+  return Object.values(trackMap);
+}
+
+function buildTrackAmData() {
+  const trackMap = {};
+  S.arcaneMastery.forEach(q => {
+    getAmTypes(q).forEach(type => {
+      if(!trackMap[type]) trackMap[type] = {name:type,earned:0,max:0};
+      trackMap[type].max += 1;
+      if (S.selectedPlayer && amQuestDone(S.selectedPlayer, q)) {
+        trackMap[type].earned += 1;
+      }
+    });
+  });
+  return Object.values(trackMap);
+}
+
+function openInfluenceModal() {
+  const player = S.selectedPlayer;
+  const stats = getIpTaskStats(player);
+
+  // Overview
+  document.getElementById('ipStatEarned').textContent    = stats.earned;
+  document.getElementById('ipStatMax').textContent       = stats.totalMax;
+  document.getElementById('ipStatRemaining').textContent = stats.remaining;
+  document.getElementById('ipStatPct').textContent       = `${stats.pct}%`;
+  document.getElementById('ipModalInfluence').textContent = `${stats.earned} / ${stats.totalMax} pts`;
+
+  // Achievement tracks
+  const tracks = buildTrackData();
+  const tracksEl = document.getElementById('ipTracks');
+  const tracksSection = document.getElementById('ipTracksSection');
+  if(tracks.length) {
+    tracksSection.style.display='';
+    tracksEl.innerHTML = tracks.map(tr=>`
+      <div class="ip-track">
+        <div class="ip-track-name">${esc(tr.name)}</div>
+        <div class="ip-track-bar-wrap"><div class="ip-track-bar" style="width:${tr.max?Math.round(tr.earned/tr.max*100):0}%"></div></div>
+        <div class="ip-track-meta">${tr.earned} / ${tr.max} pts</div>
+      </div>`).join('');
+  } else {
+    tracksSection.style.display='none';
+  }
+
+  // Populate category filter
+  const catSel = document.getElementById('ipFilterCategory');
+  const cats = [...new Set(S.influenceTasks.map(t=>getField(t,'category')).filter(Boolean))];
+  catSel.innerHTML = `<option value="">All Categories</option>` + cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+
+  // Populate Type filter dynamically from type1, type2, type3 columns
+  const typeSel = document.getElementById('ipFilterRepeat');
+  const typeSet = new Set();
+  S.influenceTasks.forEach(t => {
+    getIpTypes(t).forEach(type => {
+      if (type.trim()) typeSet.add(type.trim());
+    });
+  });
+  const dynamicTypes = [...typeSet].sort();
+  typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+
+  renderSectionInfo('ipSectionDesc','ipSectionAnnouncement','ipSectionAnnouncementText','ipSectionInfo','influence_modal');
+  renderIpTaskList();
+
+  // Hide detail task sidebar permanently and let the list take full width
+  document.getElementById('ipTaskDetail').style.display = 'none';
+  document.getElementById('ipTaskList').style.display = '';
+
+  document.getElementById('ipModal').classList.add('open');
+}
+
+function renderIpTaskList() {
+  const player = S.selectedPlayer;
+  const catFilter    = document.getElementById('ipFilterCategory').value;
+  const statusFilter = document.getElementById('ipFilterStatus').value;
+  const typeFilter   = document.getElementById('ipFilterRepeat').value;
+  const search       = document.getElementById('ipFilterSearch').value.trim().toLowerCase();
+
+  const filtered = S.influenceTasks.filter(t=>{
+    const name   = getField(t,'name');
+    const cat    = getField(t,'category');
+    
+    const earnedPts = player ? getTaskEarnedPoints(player, t) : 0;
+    const maxPts = parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10);
+    const done = player ? (earnedPts >= maxPts) : false;
+
+    if(catFilter && cat !== catFilter) return false;
+    if(statusFilter==='completed' && !done) return false;
+    if(statusFilter==='incomplete' && done) return false;
+    
+    // Dynamic type filter check
+    if (typeFilter) {
+      const taskTypes = getIpTypes(t).map(x => x.toLowerCase());
+      if (!taskTypes.includes(typeFilter.toLowerCase())) return false;
+    }
+    
+    if(search && !name.toLowerCase().includes(search) && !getField(t,'description','Description').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if(!filtered.length) {
+    document.getElementById('ipTaskList').innerHTML=`<div style="color:var(--text3);padding:24px;text-align:center;font-style:italic;">No tasks found.</div>`;
+    return;
+  }
+
+  const groups={};
+  filtered.forEach(t=>{
+    const cat=getField(t,'category')||'General';
+    if(!groups[cat]) groups[cat]=[];
+    groups[cat].push(t);
+  });
+
+  let html='';
+  for(const [catName,tasks] of Object.entries(groups)){
+    html+=`<div class="ip-category-group">
+      <div class="ip-category-header">${esc(catName)}</div>
+      <div class="ip-category-list">
+        ${tasks.map(t=>{
+          const name  = getField(t,'name');
+          const desc  = getField(t,'description','Description');
+          const notes = getField(t,'notes','Notes');
+          const maxPts = parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10);
+          const rep   = getField(t,'repeatability');
+          const types = getIpTypes(t);
+          
+          const earnedPts = player ? getTaskEarnedPoints(player, t) : 0;
+          const done = player ? (earnedPts >= maxPts) : false;
+          const started = player ? (earnedPts > 0 && earnedPts < maxPts) : false;
+          
+          const statusClass = done ? ' ip-done' : (started ? ' ip-started' : '');
+          const checkSymbol = done ? '✓' : (started ? '◐' : '○');
+          const ptsDisplay = player ? `${earnedPts} / ${maxPts}` : (maxPts ? `+${maxPts}` : '');
+
+          return `<div class="ip-row${statusClass}" data-task-name="${esc(name)}">
+            <div class="ip-check">${checkSymbol}</div>
+            <div class="ip-info">
+              <div class="ip-name">${esc(name)}</div>
+              ${desc?`<div class="ip-desc">${parseFormatting(desc)}</div>`:''}
+              ${notes?`<div class="ip-notes"><strong>Notes:</strong> ${parseFormatting(notes)}</div>`:''}
+              ${types.length?`<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`:''}
+            </div>
+            ${rep?`<div class="ip-repeat">${esc(rep)}</div>`:''}
+            <div class="ip-pts">${ptsDisplay}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+  document.getElementById('ipTaskList').innerHTML=html;
+}
+
+function clearIpFilters() {
+  document.getElementById('ipFilterCategory').value='';
+  document.getElementById('ipFilterStatus').value='';
+  document.getElementById('ipFilterRepeat').value='';
+  document.getElementById('ipFilterSearch').value='';
+  renderIpTaskList();
+}
+
+function clearAmFilters() {
+  document.getElementById('amFilterStatus').value='';
+  document.getElementById('amFilterType').value='';
+  document.getElementById('amFilterSearch').value='';
+  renderAmQuestList();
+}
+
+function clearSaFilters() {
+  document.getElementById('saFilterStatus').value='';
+  document.getElementById('saFilterType').value='';
+  document.getElementById('saFilterSearch').value='';
+  renderSaQuestList();
+}
+
+function closeInfluenceModal() {
+  document.getElementById('ipModal').classList.remove('open');
+  S.activeIpTask=null;
+  setBnavActive('map');
+}
+
+// ─── ARCANE MASTERY MODAL ───
+function openAmModal() {
+  const player = S.selectedPlayer;
+  const total = S.arcaneMastery.length;
+  const done = getAmDoneCount(player);
+
+  document.getElementById('amStatDone').textContent      = done;
+  document.getElementById('amStatTotal').textContent     = total;
+  document.getElementById('amStatRemaining').textContent = Math.max(0, total - done);
+  document.getElementById('amStatPct').textContent       = total ? `${Math.round(done/total*100)}%` : '0%';
+  document.getElementById('amModalProgress').textContent = `${done} / ${total} Mastered`;
+
+  renderSectionInfo('amSectionDesc','amSectionAnnouncement','amSectionAnnouncementText','amSectionInfo','arcane_mastery_modal');
+
+  const typeSel = document.getElementById('amFilterType');
+  const typeSet = new Set();
+  S.arcaneMastery.forEach(q => getAmTypes(q).forEach(type => { if (type.trim()) typeSet.add(type.trim()); }));
+  const dynamicTypes = [...typeSet].sort();
+  typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+
+  const tracks = buildTrackAmData();
+  const tracksEl = document.getElementById('amTracks');
+  const tracksSection = document.getElementById('amTracksSection');
+  if(tracks.length) {
+    tracksSection.style.display='';
+    tracksEl.innerHTML = tracks.map(tr=>`
+      <div class="ip-track">
+        <div class="ip-track-name">${esc(tr.name)}</div>
+        <div class="ip-track-bar-wrap"><div class="ip-track-bar" style="width:${tr.max?Math.round(tr.earned/tr.max*100):0}%"></div></div>
+        <div class="ip-track-meta">${tr.earned} / ${tr.max} arts</div>
+      </div>`).join('');
+  } else {
+    tracksSection.style.display='none';
+  }
+
+  // Reset detail view
+  S.activeAmQuest = null;
+  document.getElementById('amQuestDetail').style.display = 'none';
+  document.getElementById('amQuestList').style.display   = '';
+
+  renderAmQuestList();
+  document.getElementById('amModal').classList.add('open');
+}
+
+function renderAmQuestList() {
+  const player      = S.selectedPlayer;
+  const statusFilter = document.getElementById('amFilterStatus').value;
+  const search       = document.getElementById('amFilterSearch').value.trim().toLowerCase();
+
+  const typeFilter = document.getElementById('amFilterType').value;
+  const filtered = S.arcaneMastery.filter(q => {
+    const name = getField(q, 'name');
+    const done = amQuestDone(player, q);
+    const types = getAmTypes(q).map(t => t.toLowerCase());
+    if (statusFilter === 'mastered'   && !done) return false;
+    if (statusFilter === 'unmastered' && done)  return false;
+    if (typeFilter && !types.includes(typeFilter.toLowerCase())) return false;
+    if (search && !name.toLowerCase().includes(search) &&
+        !getField(q,'description').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    document.getElementById('amQuestList').innerHTML = `<div style="color:var(--text3);padding:24px;text-align:center;font-style:italic;">No quests found.</div>`;
+    return;
+  }
+
+  const groups = {};
+  filtered.forEach(q => {
+    const types = getAmTypes(q);
+    const group = types[0] || 'General';
+    if (!groups[group]) groups[group] = [];
+    groups[group].push(q);
+  });
+
+  let html = '';
+  Object.entries(groups).forEach(([groupName, quests]) => {
+    html += `<div class="ip-category-group">
+      <div class="ip-category-header">${esc(groupName)}</div>
+      <div class="ip-category-list">
+        ${quests.map(q => {
+          const name = getField(q, 'name');
+          const description = getField(q, 'description');
+          const done = amQuestDone(player, q);
+          const statusClass = done ? ' am-done' : '';
+          const checkSymbol = done ? '✓' : '○';
+          const types = getAmTypes(q);
+          return `<div class="am-quest-row${statusClass}" data-quest-name="${esc(name)}">
+            <div class="am-quest-check">${checkSymbol}</div>
+            <div class="am-quest-info">
+              <div class="am-quest-name">${esc(name)}</div>
+              ${description ? `<div class="am-quest-description">${esc(description)}</div>` : ''}
+              ${types.length?`<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`:''}
+            </div>
+            <div class="am-quest-arrow">›</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('amQuestList').innerHTML = html;
+
+  document.getElementById('amQuestList').querySelectorAll('.am-quest-row').forEach(el => {
+    el.addEventListener('click', () => {
+      const questName = el.dataset.questName;
+      const quest = S.arcaneMastery.find(q => getField(q,'name') === questName);
+      if (quest) openAmQuestDetail(quest);
+    });
+  });
+}
+
+function openAmQuestDetail(quest) {
+  S.activeAmQuest = quest;
+  S.activeAmTab   = 'description';
+  const player = S.selectedPlayer;
+  const done   = amQuestDone(player, quest);
+  const name   = getField(quest, 'name');
+  const types  = getAmTypes(quest);
+
+  document.getElementById('amQuestList').style.display   = 'none';
+  document.getElementById('amQuestDetail').style.display = '';
+  document.getElementById('amDetailName').textContent    = name;
+  document.getElementById('amDetailMeta').innerHTML      = types.length
+    ? `<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`
+    : `<div class="ip-tags"><span class="ip-tag">Type: Unknown</span></div>`;
+  document.getElementById('amDetailStatus').textContent  = done ? '✓ Mastered' : '○ Not Yet Mastered';
+  document.getElementById('amDetailStatus').className    = 'am-detail-status ' + (done ? 'am-detail-done' : 'am-detail-pending');
+
+  // Activate first tab with content
+  const tabs = ['description','instructions','lore','rule','submission','note'];
+  const firstWithContent = tabs.find(t => !!getField(quest, t)) || 'description';
+  S.activeAmTab = firstWithContent;
+
+  document.querySelectorAll('.am-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === S.activeAmTab);
+    btn.onclick = () => {
+      S.activeAmTab = btn.dataset.tab;
+      document.querySelectorAll('.am-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === S.activeAmTab));
+      renderAmTab(quest, S.activeAmTab);
+    };
+  });
+
+  renderAmTab(quest, S.activeAmTab);
+}
+
+function renderAmTab(quest, tab) {
+  const val = getField(quest, tab);
+  document.getElementById('amTabContent').innerHTML = val
+    ? parseFormatting(val)
+    : '<span style="color:var(--text3);font-style:italic">No content available.</span>';
+
+  const copyBtn = document.getElementById('amCopySubmissionBtn');
+  if (tab === 'submission' && val) {
+    copyBtn.style.display = '';
+    copyBtn.disabled = false;
+    copyBtn.textContent = 'Copy';
+    copyBtn.onclick = () => copySubmissionText(val, copyBtn);
+  } else {
+    copyBtn.style.display = 'none';
+  }
+}
+
+function copySubmissionText(text, button) {
+  if (!text) return;
+  const normalized = text.replace(/\r\n?/g, '\n').trim();
+  copyTextToClipboard(normalized).then(() => {
+    const original = button.textContent;
+    button.textContent = 'Copied!';
+    button.disabled = true;
+    setTimeout(() => {
+      button.textContent = original;
+      button.disabled = false;
+    }, 1400);
+  }).catch(() => {
+    const original = button.textContent;
+    button.textContent = 'Copy failed';
+    button.disabled = true;
+    setTimeout(() => {
+      button.textContent = original;
+      button.disabled = false;
+    }, 1400);
+  });
+}
+
+function copyTextToClipboard(value) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(value);
+  }
+  return new Promise((resolve, reject) => {
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      successful ? resolve() : reject();
+    } catch (err) {
+      document.body.removeChild(textarea);
+      reject(err);
+    }
+  });
+}
+
+function closeAmModal() {
+  document.getElementById('amModal').classList.remove('open');
+  S.activeAmQuest = null;
+  setBnavActive('map');
+}
+
+function getHeTypes(event) {
+  const t1 = getField(event, 'type1');
+  const t2 = getField(event, 'type2');
+  const t3 = getField(event, 'type3');
+  return [t1, t2, t3].map(t => String(t || '').trim()).filter(Boolean);
+}
+
+function isHeDuelQuest(quest) {
+  return getHeTypes(quest).some(type => normKey(type) === 'duels');
+}
+
+function getHeQuestTrackerFields(quest) {
+  if (!quest) return null;
+  const qName = String(getField(quest, 'name') || '').trim();
+  const mapping = {
+    'Playful Embers': { participation: 'Playful Embers Participation', win: 'Playful Embers Win' },
+    'Playful Dundr': { participation: 'Playful Dundr Participation', win: 'Playful Dundr Win' },
+    'Playful Drop': { participation: 'Playful Drop Participation', win: 'Playful Drop Win' },
+    'Mournful': { participation: 'Mournful Participation', win: 'Mournful Win' },
+    'Drengr Games': { participation: 'Drengr Games Participation', win: 'Drengr Games Win' }
+  };
+  return mapping[qName] || null;
+}
+
+function getHeTrackerValue(player, quest, kind) {
+  if (!player || !quest) return 0;
+  const trackerFields = getHeQuestTrackerFields(quest);
+  if (trackerFields?.[kind]) {
+    const raw = getField(player, trackerFields[kind]);
+    const parsed = parseInt(String(raw).trim(), 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  const qName = String(getField(quest, 'name') || '').trim();
+  const fallbackField = `${qName} ${kind}`;
+  const raw = getField(player, fallbackField);
+  const parsed = parseInt(String(raw).trim(), 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isHeDrengrGamesCompleted(player) {
+  if (!player) return false;
+  const row = getPlayerInfluenceStatRow(player);
+  if (!row) return false;
+  const raw = getField(row, 'Drengr Magus');
+  if (raw === '') return false;
+  const parsed = parseInt(String(raw).trim(), 10);
+  if (!Number.isNaN(parsed)) return parsed > 0;
+  return isTruthy(raw);
+}
+
+function getHeDoneCount(player) {
+  if (!player) return 0;
+  return S.hostedEvents.filter(q => heQuestDone(player, q)).length;
+}
+
+function getHeStatSummary(player) {
+  const wins = parseInt(String(getField(player, 'Duels Win')).trim(), 10) || 0;
+  const participations = parseInt(String(getField(player, 'Duels Participation')).trim(), 10) || 0;
+  return { wins, participations, totalDuelEvents: S.hostedEvents.filter(isHeDuelQuest).length };
+}
+
+function heQuestDone(player, quest) {
+  if (!player || !quest) return false;
+  const qName = String(getField(quest, 'name') || '').trim();
+  console.log("normKey(qName)",normKey(qName));
+  if (normKey(qName) === 'drengr games') return isHeDrengrGamesCompleted(player);
+  const win = getHeTrackerValue(player, quest, 'win');
+  const participation = getHeTrackerValue(player, quest, 'participation');
+  if (win > 0 || participation > 0) return true;
+  return isTruthy(getField(player, qName));
+}
+
+function buildTrackHeData() {
+  const trackMap = {};
+  S.hostedEvents.forEach(q => {
+    getHeTypes(q).forEach(type => {
+      if (!trackMap[type]) trackMap[type] = {name:type,earned:0,max:0};
+      trackMap[type].max += 1;
+      if (S.selectedPlayer && heQuestDone(S.selectedPlayer, q)) {
+        trackMap[type].earned += 1;
+      }
+    });
+  });
+  return Object.values(trackMap);
+}
+
+function openHeModal() {
+  const player = S.selectedPlayer;
+  const stats = getHeStatSummary(player);
+
+  document.getElementById('heStatWins').textContent = stats.wins;
+  document.getElementById('heStatParticipation').textContent = stats.participations;
+  document.getElementById('heModalProgress').textContent = `${stats.wins} wins / ${stats.participations} participations`;
+
+  renderSectionInfo('heSectionDesc','heSectionAnnouncement','heSectionAnnouncementText','heSectionInfo','hosted_events_modal');
+
+  const typeSel = document.getElementById('heFilterType');
+  const typeSet = new Set();
+  S.hostedEvents.forEach(q => getHeTypes(q).forEach(type => { if (type.trim()) typeSet.add(type.trim()); }));
+  const dynamicTypes = [...typeSet].sort();
+  typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+
+  const tracks = buildTrackHeData();
+  const tracksEl = document.getElementById('heTracks');
+  const tracksSection = document.getElementById('heTracksSection');
+  if(tracks.length) {
+    tracksSection.style.display='';
+    tracksEl.innerHTML = tracks.map(tr=>`
+      <div class="ip-track">
+        <div class="ip-track-name">${esc(tr.name)}</div>
+        <div class="ip-track-bar-wrap"><div class="ip-track-bar" style="width:${tr.max?Math.round(tr.earned/tr.max*100):0}%"></div></div>
+        <div class="ip-track-meta">${tr.earned} / ${tr.max} events</div>
+      </div>`).join('');
+  } else {
+    tracksSection.style.display='none';
+  }
+
+  S.activeHeQuest = null;
+  document.getElementById('heQuestDetail').style.display = 'none';
+  document.getElementById('heQuestList').style.display   = '';
+
+  renderHeQuestList();
+  document.getElementById('heModal').classList.add('open');
+}
+
+function renderHeQuestList() {
+  const player      = S.selectedPlayer;
+  const statusFilter = document.getElementById('heFilterStatus').value;
+  const search       = document.getElementById('heFilterSearch').value.trim().toLowerCase();
+  const typeFilter   = document.getElementById('heFilterType').value;
+  const filtered = S.hostedEvents.filter(q => {
+    const name = getField(q, 'name');
+    const done = heQuestDone(player, q);
+    const types = getHeTypes(q).map(t => t.toLowerCase());
+    if (statusFilter === 'mastered'   && !done) return false;
+    if (statusFilter === 'unmastered' && done)  return false;
+    if (typeFilter && !types.includes(typeFilter.toLowerCase())) return false;
+    if (search && !name.toLowerCase().includes(search) &&
+        !getField(q,'description').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    document.getElementById('heQuestList').innerHTML = `<div style="color:var(--text3);padding:24px;text-align:center;font-style:italic;">No events found.</div>`;
+    return;
+  }
+
+  const groups = {};
+  filtered.forEach(q => {
+    const types = getHeTypes(q);
+    const group = types[0] || 'General';
+    if (!groups[group]) groups[group] = [];
+    groups[group].push(q);
+  });
+
+  let html = '';
+  Object.entries(groups).forEach(([groupName, quests]) => {
+    html += `<div class="ip-category-group">
+      <div class="ip-category-header">${esc(groupName)}</div>
+      <div class="ip-category-list">
+        ${quests.map(q => {
+          const name = getField(q, 'name');
+          const description = getField(q, 'description');
+          const done = heQuestDone(player, q);
+          const statusClass = done ? ' am-done' : '';
+          const checkSymbol = done ? '✓' : '○';
+          const types = getHeTypes(q);
+          const duelStats = isHeDuelQuest(q)
+            ? `<div class="ip-tags"><span class="ip-tag">Wins: ${getHeTrackerValue(player, q, 'win')}</span><span class="ip-tag">Participation: ${getHeTrackerValue(player, q, 'participation')}</span></div>`
+            : '';
+          const drengrStatus = normKey(name) === 'drengr-games'
+            ? `<div class="ip-tags"><span class="ip-tag">Completed: ${isHeDrengrGamesCompleted(player) ? '✓' : '○'}</span></div>`
+            : '';
+          return `<div class="am-quest-row${statusClass}" data-quest-name="${esc(name)}">
+            <div class="am-quest-check">${checkSymbol}</div>
+            <div class="am-quest-info">
+              <div class="am-quest-name">${esc(name)}</div>
+              ${description ? `<div class="am-quest-description">${esc(description)}</div>` : ''}
+              ${types.length?`<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`:''}
+              ${duelStats}
+              ${drengrStatus}
+            </div>
+            <div class="am-quest-arrow">›</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('heQuestList').innerHTML = html;
+
+  document.getElementById('heQuestList').querySelectorAll('.am-quest-row').forEach(el => {
+    el.addEventListener('click', () => {
+      const questName = el.dataset.questName;
+      const quest = S.hostedEvents.find(q => getField(q,'name') === questName);
+      if (quest) openHeQuestDetail(quest);
+    });
+  });
+}
+
+function openHeQuestDetail(quest) {
+  S.activeHeQuest = quest;
+  S.activeHeTab   = 'description';
+  const player = S.selectedPlayer;
+  const done   = heQuestDone(player, quest);
+  const name   = getField(quest, 'name');
+  const types  = getHeTypes(quest);
+
+  document.getElementById('heQuestList').style.display   = 'none';
+  document.getElementById('heQuestDetail').style.display = '';
+  document.getElementById('heDetailName').textContent    = name;
+  document.getElementById('heDetailMeta').innerHTML      = types.length
+    ? `<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`
+    : `<div class="ip-tags"><span class="ip-tag">Type: Unknown</span></div>`;
+  document.getElementById('heDetailStatus').textContent  = done ? '✓ Completed' : '○ Incomplete';
+  document.getElementById('heDetailStatus').className    = 'am-detail-status ' + (done ? 'am-detail-done' : 'am-detail-pending');
+
+  const tabs = ['description','instructions','lore','rule','submission','note'];
+  const firstWithContent = tabs.find(t => !!getField(quest, t)) || 'description';
+  S.activeHeTab = firstWithContent;
+
+  document.querySelectorAll('#heQuestDetail .am-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === S.activeHeTab);
+    btn.onclick = () => {
+      S.activeHeTab = btn.dataset.tab;
+      document.querySelectorAll('#heQuestDetail .am-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === S.activeHeTab));
+      renderHeTab(quest, S.activeHeTab);
+    };
+  });
+
+  renderHeTab(quest, S.activeHeTab);
+}
+
+function renderHeTab(quest, tab) {
+  const val = getField(quest, tab);
+  document.getElementById('heTabContent').innerHTML = val
+    ? parseFormatting(val)
+    : '<span style="color:var(--text3);font-style:italic">No content available.</span>';
+
+  const copyBtn = document.getElementById('heCopySubmissionBtn');
+  if (tab === 'submission' && val) {
+    copyBtn.style.display = '';
+    copyBtn.disabled = false;
+    copyBtn.textContent = 'Copy';
+    copyBtn.onclick = () => copySubmissionText(val, copyBtn);
+  } else {
+    copyBtn.style.display = 'none';
+  }
+}
+
+function clearHeFilters() {
+  document.getElementById('heFilterStatus').value='';
+  document.getElementById('heFilterType').value='';
+  document.getElementById('heFilterSearch').value='';
+  renderHeQuestList();
+}
+
+function closeHeModal() {
+  document.getElementById('heModal').classList.remove('open');
+  S.activeHeQuest = null;
+  setBnavActive('map');
+}
+
+// ─── SEARCH MODAL — MAGE CODEX ───
+function openSearchModal() {
+  renderSectionInfo('codexSectionDesc','codexSectionAnnouncement','codexSectionAnnouncementText','codexSectionInfo','codex_modal');
+  document.getElementById('searchModal').classList.add('open');
+  setTimeout(()=>document.getElementById('searchInput').focus(),100);
+}
+function closeSearchModal() {
+  document.getElementById('searchModal').classList.remove('open');
+  setBnavActive('map');
+}
+
+function buildSearchIndex() {
+  const items=[];
+
+  S.ranks.forEach(r=>{
+    items.push({type:'rank',icon:'⬡',label:r.name,sub:r.description||r.lore||'',badge:'Rank',data:r});
+  });
+
+  S.reqRegistry.forEach(req=>{
+    items.push({type:'req',icon:'📋',label:req.name,sub:req.description||'',badge:req.type||'Requirement',data:req});
+  });
+
+  S.influenceTasks.forEach(t=>{
+    const name=getField(t,'name');
+    if(!name) return;
+    items.push({type:'task',icon:'🔮',label:name,sub:getField(t,'description','Description')||'',badge:`+${getField(t,'points','Points')||'?'} pts`,data:t});
+  });
+
+  S.ranks.forEach(r=>{
+    r.rewards.forEach(rw=>{
+      items.push({type:'reward',icon:'✦',label:rw.name,sub:rw.description||`Reward from ${r.name}`,badge:'Reward',data:{...rw,rankId:r.id,rankName:r.name}});
+    });
+  });
+
+  return items;
+}
+
+function runSearch(query) {
+  const q=query.trim().toLowerCase();
+  const resultsEl=document.getElementById('searchResults');
+
+  if(!q){
+    resultsEl.innerHTML=`<div class="search-empty"><div class="search-empty-icon">✦</div><div class="search-empty-text">Begin typing to search the Codex</div></div>`;
+    return;
+  }
+
+  const index=buildSearchIndex();
+  const matches=index.filter(item=>
+    item.label.toLowerCase().includes(q)||
+    item.sub.toLowerCase().includes(q)||
+    item.badge.toLowerCase().includes(q)
+  );
+
+  if(!matches.length){
+    resultsEl.innerHTML=`<div class="search-no-results">No results for "<strong>${esc(query)}</strong>"</div>`;
+    return;
+  }
+
+  const groups={rank:[],req:[],task:[],reward:[]};
+  const groupLabels={rank:'Ranks',req:'Requirements',task:'Influence Tasks',reward:'Rewards'};
+  matches.forEach(m=>groups[m.type]?.push(m));
+
+  let html='';
+  for(const [type,items] of Object.entries(groups)){
+    if(!items.length) continue;
+    html+=`<div class="search-group">
+      <div class="search-group-title">${groupLabels[type]}</div>
+      ${items.map(item=>`
+        <div class="search-result-item" data-result-type="${type}" data-result-label="${esc(item.label)}">
+          <div class="search-result-icon">${item.icon}</div>
+          <div class="search-result-info">
+            <div class="search-result-name">${esc(item.label)}</div>
+            ${item.sub?`<div class="search-result-sub">${esc(item.sub.slice(0,80))}${item.sub.length>80?'…':''}</div>`:''}
+          </div>
+          <div class="search-result-badge">${esc(item.badge)}</div>
+        </div>`).join('')}
+    </div>`;
+  }
+  resultsEl.innerHTML=html;
+
+  resultsEl.querySelectorAll('.search-result-item').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const type=el.dataset.resultType;
+      const label=el.dataset.resultLabel;
+      handleSearchSelect(type,label);
+    });
+  });
+}
+
+function handleSearchSelect(type, label) {
+  closeSearchModal();
+  if(type==='rank'){
+    const rank=S.ranks.find(r=>r.name===label);
+    if(rank){
+      S.selectedRankId=rank.id;
+      selectNode(rank.id);
+      if(window.innerWidth<900) openDrawer();
+    }
+  } else if(type==='req'){
+    const rank=S.ranks.find(r=>r.requirements.some(q=>q.name===label));
+    if(rank){
+      S.selectedRankId=rank.id;
+      S.selectedReqName=label;
+      selectNode(rank.id);
+      if(window.innerWidth<900) openDrawer();
+    }
+  } else if(type==='task'){
+    const task=S.influenceTasks.find(t=>getField(t,'name')===label);
+    if(task){
+      openInfluenceModal();
+      // Wait for DOM nodes to render then scroll and flash highlight
+      setTimeout(()=>{
+        const row = Array.from(document.querySelectorAll('#ipTaskList .ip-row')).find(el => el.dataset.taskName === label);
+        if (row) {
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          row.classList.add('ip-row-highlight');
+          setTimeout(() => row.classList.remove('ip-row-highlight'), 2500);
+        }
+      }, 150);
+    }
+  } else if(type==='reward'){
+    const rank=S.ranks.find(r=>r.rewards.some(rw=>rw.name===label));
+    if(rank){
+      S.selectedRankId=rank.id;
+      selectNode(rank.id);
+      if(window.innerWidth<900) openDrawer();
+    }
+  }
+}
+
+// ─── SUPREME ARTS MODAL ───
+function openSaModal(wayName = '') {
+  const player = S.selectedPlayer;
+  const total = S.supremeArts.length;
+  const done = getSaDoneCount(player);
+
+  document.getElementById('saStatDone').textContent      = done;
+  document.getElementById('saStatTotal').textContent     = total;
+  document.getElementById('saStatRemaining').textContent = Math.max(0, total - done);
+  document.getElementById('saStatPct').textContent       = total ? `${Math.round(done/total*100)}%` : '0%';
+  document.getElementById('saModalProgress').textContent = `${done} / ${total} Mastered`;
+
+  renderSectionInfo('saSectionDesc','saSectionAnnouncement','saSectionAnnouncementText','saSectionInfo','supreme_arts_modal');
+
+  const typeSel = document.getElementById('saFilterType');
+  const typeSet = new Set();
+  S.supremeArts.forEach(q => getSupremeTypes(q).forEach(type => { if (type.trim()) typeSet.add(type.trim()); }));
+  const dynamicTypes = [...typeSet].sort();
+  typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  if(wayName) {
+    typeSel.value = wayName;
+  }
+
+  // Supreme Way tracks
+  const tracks = buildTrackSupremeData();
+  const tracksEl = document.getElementById('saTracks');
+  const tracksSection = document.getElementById('saTracksSection');
+  if(tracks.length) {
+    tracksSection.style.display='';
+    tracksEl.innerHTML = tracks.map(tr=>`
+      <div class="ip-track">
+        <div class="ip-track-name">${esc(tr.name)}</div>
+        <div class="ip-track-bar-wrap"><div class="ip-track-bar" style="width:${tr.max?Math.round(tr.earned/tr.max*100):0}%"></div></div>
+        <div class="ip-track-meta">${tr.earned} / ${tr.max} arts</div>
+      </div>`).join('');
+  } else {
+    tracksSection.style.display='none';
+  }
+
+  // Reset detail view
+  S.activeSaQuest = null;
+  document.getElementById('saQuestDetail').style.display = 'none';
+  document.getElementById('saQuestList').style.display   = '';
+
+  renderSaQuestList();
+  document.getElementById('saModal').classList.add('open');
+}
+
+function renderSaQuestList() {
+  const player      = S.selectedPlayer;
+  const statusFilter = document.getElementById('saFilterStatus').value;
+  const search       = document.getElementById('saFilterSearch').value.trim().toLowerCase();
+
+  const typeFilter = document.getElementById('saFilterType').value;
+  const filtered = S.supremeArts.filter(q => {
+    const name = getField(q, 'name');
+    const done = saQuestDone(player, q);
+    const types = getSupremeTypes(q).map(t => t.toLowerCase());
+    if (statusFilter === 'mastered'   && !done) return false;
+    if (statusFilter === 'unmastered' && done)  return false;
+    if (typeFilter && !types.includes(typeFilter.toLowerCase())) return false;
+    if (search && !name.toLowerCase().includes(search) &&
+        !getField(q,'description').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    document.getElementById('saQuestList').innerHTML = `<div style="color:var(--text3);padding:24px;text-align:center;font-style:italic;">No quests found.</div>`;
+    return;
+  }
+
+  const groups = {};
+  filtered.forEach(q => {
+    const types = getSupremeTypes(q);
+    const group = types[0] || 'General';
+    if (!groups[group]) groups[group] = [];
+    groups[group].push(q);
+  });
+
+  let html = '';
+  Object.entries(groups).forEach(([groupName, quests]) => {
+    html += `<div class="ip-category-group">
+      <div class="ip-category-header">${esc(groupName)}</div>
+      <div class="ip-category-list">
+        ${quests.map(q => {
+          const name = getField(q, 'name');
+          const description = getField(q, 'description');
+          const done = saQuestDone(player, q);
+          const statusClass = done ? ' sa-done' : '';
+          const checkSymbol = done ? '✓' : '○';
+          const types = getSupremeTypes(q);
+          return `<div class="sa-quest-row${statusClass}" data-quest-name="${esc(name)}">
+            <div class="sa-quest-check">${checkSymbol}</div>
+            <div class="sa-quest-info">
+              <div class="sa-quest-name">${esc(name)}</div>
+              ${description ? `<div class="sa-quest-description">${esc(description)}</div>` : ''}
+              ${types.length?`<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`:''}
+            </div>
+            <div class="sa-quest-arrow">›</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('saQuestList').innerHTML = html;
+
+  document.getElementById('saQuestList').querySelectorAll('.sa-quest-row').forEach(el => {
+    el.addEventListener('click', () => {
+      const questName = el.dataset.questName;
+      const quest = S.supremeArts.find(q => getField(q,'name') === questName);
+      if (quest) openSaQuestDetail(quest);
+    });
+  });
+}
+
+function openSaQuestDetail(quest) {
+  S.activeSaQuest = quest;
+  S.activeSaTab   = 'description';
+  const player = S.selectedPlayer;
+  const done   = saQuestDone(player, quest);
+  const name   = getField(quest, 'name');
+  const types  = getSupremeTypes(quest);
+
+  document.getElementById('saQuestList').style.display   = 'none';
+  document.getElementById('saQuestDetail').style.display = '';
+  document.getElementById('saDetailName').textContent    = name;
+  document.getElementById('saDetailMeta').innerHTML      = types.length
+    ? `<div class="ip-tags"><span class="ip-tag">${esc(types.join(', '))}</span></div>`
+    : `<div class="ip-tags"><span class="ip-tag">Type: Unknown</span></div>`;
+  document.getElementById('saDetailStatus').textContent  = done ? '✓ Mastered' : '○ Not Yet Mastered';
+  document.getElementById('saDetailStatus').className    = 'sa-detail-status ' + (done ? 'sa-detail-done' : 'sa-detail-pending');
+
+  // Activate first tab with content
+  const tabs = ['description','instructions','lore','rule','submission','note'];
+  const firstWithContent = tabs.find(t => !!getField(quest, t)) || 'description';
+  S.activeSaTab = firstWithContent;
+
+  document.querySelectorAll('.sa-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === S.activeSaTab);
+    btn.onclick = () => {
+      S.activeSaTab = btn.dataset.tab;
+      document.querySelectorAll('.sa-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === S.activeSaTab));
+      renderSaTab(quest, S.activeSaTab);
+    };
+  });
+
+  renderSaTab(quest, S.activeSaTab);
+}
+
+function renderSaTab(quest, tab) {
+  const val = getField(quest, tab);
+  document.getElementById('saTabContent').innerHTML = val
+    ? parseFormatting(val)
+    : '<span style="color:var(--text3);font-style:italic">No content available.</span>';
+
+  const copyBtn = document.getElementById('saCopySubmissionBtn');
+  if (tab === 'submission' && val) {
+    copyBtn.style.display = '';
+    copyBtn.disabled = false;
+    copyBtn.textContent = 'Copy';
+    copyBtn.onclick = () => copySubmissionText(val, copyBtn);
+  } else {
+    copyBtn.style.display = 'none';
+  }
+}
+
+function closeSaModal() {
+  document.getElementById('saModal').classList.remove('open');
+  S.activeSaQuest = null;
+  setBnavActive('map');
+}
+
+// ─── MOBILE DRAWER ───
+function openDrawer(){
+  document.getElementById('detailPanel').classList.add('drawer-open');
+  document.getElementById('drawerBackdrop').classList.add('visible');
+  setBnavActive('detail');
+}
+function closeDrawer(){
+  document.getElementById('detailPanel').classList.remove('drawer-open');
+  document.getElementById('drawerBackdrop').classList.remove('visible');
+  setBnavActive('map');
+}
+
+function initBottomNav() {
+  document.querySelectorAll('.bnav-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      if(btn.dataset.view==='map') closeDrawer();
+      else if(btn.dataset.view==='detail') openDrawer();
+      else if(btn.dataset.view==='search') openSearchModal();
+      else if(btn.dataset.view==='influence') openInfluenceModal();
+      else if(btn.dataset.view==='arcane') openAmModal();
+      else if(btn.dataset.view==='supreme') openSaModal();
+    });
+  });
+}
+
+// ─── RENDER APP ───
+function renderApp() {
+  const prog=getProgress(S.selectedPlayer);
+  renderSelector();
+  renderStatusBar(prog);
+  renderNodes(prog);
+  renderSectionInfo('homeBannerDesc','homeBannerAnnouncement','homeBannerAnnouncementText','homeBanner','homepage');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    drawPaths(prog);
+    if(S.selectedRankId) selectNode(S.selectedRankId);
+    else if(!S.selectedPlayer) showDetailPanel(false);
+  }));
+}
+
+async function refresh() {
+  const name=S.selectedPlayer?getPlayerName(S.selectedPlayer):null, rid=S.selectedRankId;
+  applyData(await loadAll());
+  S.selectedPlayer=name?S.players.find(p=>getPlayerName(p)===name)||null:null;
+  S.selectedRankId=S.ranks.some(r=>r.id===rid)?rid:null;
+  renderApp();
+}
+
+// ─── INIT ───
+async function init() {
+  applyData(await loadAll());
+  S.selectedPlayer = null;
+
+  document.getElementById('playerSelect').addEventListener('change',e=>{
+    const val=e.target.value;
+    S.selectedPlayer = val===''?null:S.players[Number(val)];
+    S.selectedRankId=null; S.selectedReqName=null;
+    renderApp();
+  });
+
+  document.getElementById('drawerBackdrop').addEventListener('click',closeDrawer);
+  document.getElementById('detailPanelClose').addEventListener('click',closeDrawer);
+
+  // Influence modal
+  document.getElementById('ipModalClose').addEventListener('click',closeInfluenceModal);
+  document.getElementById('ipModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeInfluenceModal();});
+  document.getElementById('ipDetailBack').addEventListener('click',()=>{
+    S.activeIpTask=null;
+    document.getElementById('ipTaskDetail').style.display='none';
+    document.getElementById('ipTaskList').style.display='';
+  });
+
+  // Filter live updates
+  ['ipFilterCategory','ipFilterStatus','ipFilterRepeat'].forEach(id=>{
+    document.getElementById(id).addEventListener('change',renderIpTaskList);
+  });
+  document.getElementById('ipFilterSearch').addEventListener('input',renderIpTaskList);
+  document.getElementById('ipClearFilters').addEventListener('click',clearIpFilters);
+
+  // Topbar buttons
+  document.getElementById('searchBtn').addEventListener('click',openSearchModal);
+  document.getElementById('influenceNavBtn').addEventListener('click',openInfluenceModal);
+  document.getElementById('arcaneNavBtn').addEventListener('click',openAmModal);
+  document.getElementById('hostedNavBtn').addEventListener('click',openHeModal);
+  document.getElementById('supremeNavBtn').addEventListener('click',openSaModal);
+
+  // Hosted Events modal
+  document.getElementById('heModalClose').addEventListener('click',closeHeModal);
+  document.getElementById('heModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeHeModal();});
+  document.getElementById('heDetailBack').addEventListener('click',()=>{
+    S.activeHeQuest=null;
+    document.getElementById('heQuestDetail').style.display='none';
+    document.getElementById('heQuestList').style.display='';
+  });
+  document.getElementById('heFilterStatus').addEventListener('change',renderHeQuestList);
+  document.getElementById('heFilterType').addEventListener('change',renderHeQuestList);
+  document.getElementById('heFilterSearch').addEventListener('input',renderHeQuestList);
+  document.getElementById('heClearFilters').addEventListener('click',clearHeFilters);
+
+  // Arcane Mastery modal
+  document.getElementById('amModalClose').addEventListener('click',closeAmModal);
+  document.getElementById('amModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeAmModal();});
+  document.getElementById('amDetailBack').addEventListener('click',()=>{
+    S.activeAmQuest=null;
+    document.getElementById('amQuestDetail').style.display='none';
+    document.getElementById('amQuestList').style.display='';
+  });
+  document.getElementById('amFilterStatus').addEventListener('change',renderAmQuestList);
+  document.getElementById('amFilterType').addEventListener('change',renderAmQuestList);
+  document.getElementById('amFilterSearch').addEventListener('input',renderAmQuestList);
+  document.getElementById('amClearFilters').addEventListener('click',clearAmFilters);
+
+  // Search modal
+  document.getElementById('searchModalClose').addEventListener('click',closeSearchModal);
+  document.getElementById('searchModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeSearchModal();});
+  document.getElementById('searchInput').addEventListener('input',e=>runSearch(e.target.value));
+  document.getElementById('searchClear').addEventListener('click',()=>{
+    document.getElementById('searchInput').value='';
+    document.getElementById('searchClear').style.display='none';
+    runSearch('');
+  });
+  document.getElementById('searchInput').addEventListener('input',e=>{
+    document.getElementById('searchClear').style.display=e.target.value?'':'none';
+  });
+
+  // Supreme Arts modal
+  document.getElementById('saModalClose').addEventListener('click',closeSaModal);
+  document.getElementById('saModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeSaModal();});
+  document.getElementById('saDetailBack').addEventListener('click',()=>{
+    S.activeSaQuest=null;
+    document.getElementById('saQuestDetail').style.display='none';
+    document.getElementById('saQuestList').style.display='';
+  });
+  document.getElementById('saFilterStatus').addEventListener('change',renderSaQuestList);
+  document.getElementById('saFilterType').addEventListener('change',renderSaQuestList);
+  document.getElementById('saFilterSearch').addEventListener('input',renderSaQuestList);
+  document.getElementById('saClearFilters').addEventListener('click',clearSaFilters);
+
+  // Keyboard shortcut: Cmd/Ctrl+K for search
+  document.addEventListener('keydown',e=>{
+    if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openSearchModal();}
+    if(e.key==='Escape'){closeSearchModal();closeInfluenceModal();closeAmModal();closeSaModal();}
+  });
+
+  initBottomNav();
+  renderApp();
+  setInterval(refresh,60000);
+}
+
+let rafResize;
+let lastMobileState = isMobileView();
+window.addEventListener('resize',()=>{
+  cancelAnimationFrame(rafResize);
+  rafResize=requestAnimationFrame(()=>{
+    const nowMobile = isMobileView();
+    if(nowMobile !== lastMobileState){
+      lastMobileState = nowMobile;
+      renderNodes(getProgress(S.selectedPlayer));
+    }
+    drawPaths();
+  });
+});
+document.addEventListener('DOMContentLoaded',init);
