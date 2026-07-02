@@ -213,6 +213,7 @@ function parseRank(row, index) {
     id:slugify(name||`rank-${index+1}`),order:index,name,
     description:getField(row,'description','rank description')||'',
     lore:getField(row,'lore','flavor')||'',
+    image:getField(row,'image')||'',
     rewards,requirements:reqs
   };
 }
@@ -422,7 +423,12 @@ function getProgress(player) {
 }
 
 // ─── ICONS ───
-function getIconSrc(rank){const l=S.layout.get(rank.id);return `${RANK_ICON_PATH}${cleanIcon(l?.icon||`${rank.id}.png`)}`;}
+function getIconSrc(rank){
+  const img=(rank.image||'').trim();
+  if(img) return /^https?:\/\//i.test(img) ? img : `${RANK_ICON_PATH}${cleanIcon(img)}`;
+  const l=S.layout.get(rank.id);
+  return `${RANK_ICON_PATH}${cleanIcon(l?.icon||`${rank.id}.png`)}`;
+}
 function iconImg(rank,cls='rank-icon-img'){return `<img class="${esc(cls)}" src="${esc(getIconSrc(rank))}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${DEFAULT_RANK_ICON}'">`;}
 
 // ─── RENDER STATUS BAR ───
@@ -1825,4 +1831,3 @@ window.addEventListener('resize',()=>{
   });
 });
 document.addEventListener('DOMContentLoaded',init);
-
