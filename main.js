@@ -539,6 +539,30 @@ function drawPaths(prog=getProgress(S.selectedPlayer)) {
 }
 
 // ─── DETAIL PANEL ───
+function getRequirementDisplayName(req) {
+  return normKey(req?.name) === 'mage duel' ? 'Mage Duel Win' : (req?.name || '');
+}
+
+function getRequirementModalRoute(req) {
+  const name = normKey(req?.name);
+  if (name === 'blood masteries' || name === 'blood mastery') return {modal:'arcane', filter:'Blood'};
+  if (name === 'elemental masteries' || name === 'elemental mastery') return {modal:'arcane', filter:'Elemental'};
+  if (name === 'scarlet influence') return {modal:'influence', filter:'Scarlet'};
+  if (name === 'azure influence') return {modal:'influence', filter:'Azure'};
+  if (name === 'emerald influence') return {modal:'influence', filter:'Emerald'};
+  if (name === 'mage duel') return {modal:'hosted', filter:'Duels'};
+  return null;
+}
+
+function openRequirementRoute(req) {
+  const route = getRequirementModalRoute(req);
+  if (!route) return false;
+  if (route.modal === 'arcane') openAmModal(route.filter);
+  if (route.modal === 'influence') openInfluenceModal(route.filter);
+  if (route.modal === 'hosted') openHeModal(route.filter);
+  return true;
+}
+
 function renderReqRow(req, player, index) {
   const done=reqDone(player,req);
   const sel=S.selectedReqName===req.name;
@@ -548,7 +572,7 @@ function renderReqRow(req, player, index) {
   if(req.isSupremeArtsByType) badge = ` Arts` + ` <span class="ip-badge sa-badge">✨ ${getSaDoneCountByWay(player,req.supremeWayName)} / ${req.threshold}</span>`;
   return `<button type="button" class="req-row req-button ${done?'done':'pending'}${sel?' selected':''}" data-req-index="${index}">
     <div class="req-circle">${done?'✓':'○'}</div>
-    <div class="req-name">${esc(req.name)}${badge}</div>
+    <div class="req-name">${esc(getRequirementDisplayName(req))}${badge}</div>
   </button>`;
 }
 
@@ -595,6 +619,7 @@ function selectNode(id) {
       const idx=Number(btn.dataset.reqIndex);
       const req=rank.requirements[idx];
       if(!req) return;
+      if(openRequirementRoute(req)) return;
       if(req.isInfluence){openInfluenceModal();return;}
       if(req.isArcaneMastery){openAmModal();return;}
       if(req.isSupremeArtsByType){openSaModal(req.supremeWayName);return;}
@@ -615,7 +640,7 @@ function renderReqDetail(req) {
   if(!req){card.style.display='none';return;}
   card.style.display='';
 
-  document.getElementById('requirementDetailName').textContent=req.name;
+  document.getElementById('requirementDetailName').textContent=getRequirementDisplayName(req);
   document.getElementById('requirementDetailType').textContent=req.type?`Type: ${req.type}`:'';
   document.getElementById('requirementDetailDescription').innerHTML=parseFormatting(req.description||(req?'No description.':''));
 
@@ -758,7 +783,20 @@ function buildTrackAmData() {
   return Object.values(trackMap);
 }
 
-function openInfluenceModal() {
+function selectOptionByNormalizedText(selectEl, desired) {
+  if (!selectEl || !desired) return false;
+  const want = normKey(desired);
+  const option = Array.from(selectEl.options).find(opt => {
+    const value = normKey(opt.value);
+    const label = normKey(opt.textContent);
+    return value === want || label === want || value.startsWith(want) || label.startsWith(want);
+  });
+  if (!option) return false;
+  selectEl.value = option.value;
+  return true;
+}
+
+function openInfluenceModal(filter = '') {
   const player = S.selectedPlayer;
   const stats = getIpTaskStats(player);
 
@@ -800,6 +838,10 @@ function openInfluenceModal() {
   });
   const dynamicTypes = [...typeSet].sort();
   typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  if (filter) {
+    const matchedType = selectOptionByNormalizedText(typeSel, filter);
+    if (!matchedType) selectOptionByNormalizedText(catSel, filter);
+  }
 
   renderSectionInfo('ipSectionDesc','ipSectionAnnouncement','ipSectionAnnouncementText','ipSectionInfo','influence_modal');
   renderIpTaskList();
@@ -929,7 +971,7 @@ function closeInfluenceModal() {
 }
 
 // ─── ARCANE MASTERY MODAL ───
-function openAmModal() {
+function openAmModal(filter = '') {
   const player = S.selectedPlayer;
   const total = S.arcaneMastery.length;
   const done = getAmDoneCount(player);
@@ -947,6 +989,7 @@ function openAmModal() {
   S.arcaneMastery.forEach(q => getAmTypes(q).forEach(type => { if (type.trim()) typeSet.add(type.trim()); }));
   const dynamicTypes = [...typeSet].sort();
   typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  selectOptionByNormalizedText(typeSel, filter);
 
   const tracks = buildTrackAmData();
   const tracksEl = document.getElementById('amTracks');
@@ -1229,7 +1272,7 @@ function buildTrackHeData() {
   return Object.values(trackMap);
 }
 
-function openHeModal() {
+function openHeModal(filter = '') {
   const player = S.selectedPlayer;
   const stats = getHeStatSummary(player);
 
@@ -1244,6 +1287,7 @@ function openHeModal() {
   S.hostedEvents.forEach(q => getHeTypes(q).forEach(type => { if (type.trim()) typeSet.add(type.trim()); }));
   const dynamicTypes = [...typeSet].sort();
   typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  selectOptionByNormalizedText(typeSel, filter);
 
   const tracks = buildTrackHeData();
   const tracksEl = document.getElementById('heTracks');
