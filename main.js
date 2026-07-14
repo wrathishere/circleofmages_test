@@ -166,7 +166,8 @@ function buildReqRegistry(rows) {
       description:getField(row,'description','Description'),
       instruction:getField(row,'instruction','instructions'),
       rules:getField(row,'rules'),
-      lore:getField(row,'lore','flavor')
+      lore:getField(row,'lore','flavor'),
+      submission:getField(row,'submission')
     }];
   }).filter(Boolean));
 }
@@ -180,7 +181,7 @@ function parseRank(row, index) {
     const rName=row[key].trim();
     if(!rName) return;
     const reg=S.reqRegistry.get(normKey(rName));
-    reqs.push({name:rName,description:reg?.description||'',type:reg?.type||'',instruction:reg?.instruction||'',rules:reg?.rules||'',lore:reg?.lore||'',isInfluence:false,isArcaneMastery:false,isSupremeArts:false,_order:parseInt(m[1],10)});
+    reqs.push({name:rName,description:reg?.description||'',type:reg?.type||'',instruction:reg?.instruction||'',rules:reg?.rules||'',lore:reg?.lore||'',submission:reg?.submission||'',isInfluence:false,isArcaneMastery:false,isSupremeArts:false,_order:parseInt(m[1],10)});
   });
   const ipVal=parseInt(getField(row,'influence points','influence'),10);
   if(ipVal>0) reqs.push({name:`${ipVal} Influence Points`,description:`Earn at least ${ipVal} influence points.`,type:'Influence',isInfluence:true,threshold:ipVal,_order:999});
@@ -618,12 +619,14 @@ function renderReqDetail(req) {
   document.getElementById('requirementDetailType').textContent=req.type?`Type: ${req.type}`:'';
   document.getElementById('requirementDetailDescription').innerHTML=parseFormatting(req.description||(req?'No description.':''));
 
-  const hasTabs = req.instruction||req.rules||req.lore;
+  const hasTabs = req.instruction||req.rules||req.lore||req.submission;
   const tabsEl = document.getElementById('reqTabs');
   const contentEl = document.getElementById('reqTabContent');
 
   if(hasTabs) {
     tabsEl.style.display='';
+    const validTabs = ['instruction','rules','lore','submission'];
+    if (!getReqTabValue(req, S.activeReqTab)) S.activeReqTab = validTabs.find(t => !!getReqTabValue(req, t)) || 'instruction';
     renderReqTab(req, S.activeReqTab);
 
     tabsEl.querySelectorAll('.req-tab').forEach(btn=>{
@@ -637,13 +640,34 @@ function renderReqDetail(req) {
   } else {
     tabsEl.style.display='none';
     contentEl.innerHTML='';
+    const copyBtn = document.getElementById('reqCopySubmissionBtn');
+    if (copyBtn) copyBtn.style.display = 'none';
   }
+}
+
+function getReqTabValue(req, tab) {
+  if (tab === 'instruction') return req.instruction;
+  if (tab === 'rules') return req.rules;
+  if (tab === 'submission') return req.submission;
+  return req.lore;
 }
 
 function renderReqTab(req, tab) {
   const contentEl=document.getElementById('reqTabContent');
-  const val = tab==='instruction'?req.instruction:tab==='rules'?req.rules:req.lore;
+  const val = getReqTabValue(req, tab);
   contentEl.innerHTML = val ? parseFormatting(val) : '<span style="color:var(--text3);font-style:italic">No content available.</span>';
+
+  const copyBtn = document.getElementById('reqCopySubmissionBtn');
+  if (copyBtn) {
+    if (tab === 'submission' && val) {
+      copyBtn.style.display = '';
+      copyBtn.disabled = false;
+      copyBtn.textContent = 'Copy Submission';
+      copyBtn.onclick = () => copySubmissionText(val, copyBtn);
+    } else {
+      copyBtn.style.display = 'none';
+    }
+  }
 }
 
 // ─── INFLUENCE MODAL (EXPANDED DASHBOARD) ───
@@ -837,6 +861,7 @@ function renderIpTaskList() {
           const name  = getField(t,'name');
           const desc  = getField(t,'description','Description');
           const notes = getField(t,'notes','Notes');
+          const submission = getField(t,'submission');
           const maxPts = parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10);
           const rep   = getField(t,'repeatability');
           const types = getIpTypes(t);
@@ -855,6 +880,7 @@ function renderIpTaskList() {
               <div class="ip-name">${esc(name)}</div>
               ${desc?`<div class="ip-desc">${parseFormatting(desc)}</div>`:''}
               ${notes?`<div class="ip-notes"><strong>Notes:</strong> ${parseFormatting(notes)}</div>`:''}
+              ${submission?`<button class="copy-btn inline-copy-btn" type="button" data-copy-submission="${esc(submission)}">Copy Submission</button>`:''}
               ${types.length?`<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`:''}
             </div>
             ${rep?`<div class="ip-repeat">${esc(rep)}</div>`:''}
@@ -864,7 +890,14 @@ function renderIpTaskList() {
       </div>
     </div>`;
   }
-  document.getElementById('ipTaskList').innerHTML=html;
+  const listEl = document.getElementById('ipTaskList');
+  listEl.innerHTML=html;
+  listEl.querySelectorAll('[data-copy-submission]').forEach(btn => {
+    btn.addEventListener('click', event => {
+      event.stopPropagation();
+      copySubmissionText(btn.dataset.copySubmission, btn);
+    });
+  });
 }
 
 function clearIpFilters() {
