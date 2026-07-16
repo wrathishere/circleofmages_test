@@ -60,7 +60,8 @@ let S = {
   hostedEvents:[],
   sections:new Map(),
   activeAmTab:'description', activeAmQuest:null,
-  activeHeTab:'description', activeHeQuest:null
+  activeHeTab:'description', activeHeQuest:null,
+  searchIndex:[]
 };
 
 // ─── UTILS ───
@@ -91,13 +92,24 @@ function parseFormatting(text) {
   return html.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>');
 }
 
+const fieldCache = new WeakMap();
+
+function getFieldMap(row) {
+  if (!row || typeof row !== 'object') return new Map();
+  let map = fieldCache.get(row);
+  if (!map) {
+    map = new Map(Object.entries(row).map(([k,v]) => [normKey(k), v]));
+    fieldCache.set(row, map);
+  }
+  return map;
+}
+
 function getField(row, ...names) {
   if (!row) return '';
-  const entries = Object.entries(row);
+  const fields = getFieldMap(row);
   for (const name of names) {
-    const want = normKey(name);
-    const found = entries.find(([k]) => normKey(k) === want);
-    if (found && found[1] !== undefined) return found[1];
+    const val = fields.get(normKey(name));
+    if (val !== undefined) return val;
   }
   return '';
 }
@@ -129,7 +141,7 @@ const csvUrl = sheet => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz
 
 async function loadSheet(name, fallback=[], optional=false) {
   try {
-    const r = await fetch(csvUrl(name),{cache:'no-store'});
+    const r = await fetch(csvUrl(name));
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
     const rows = parseCsv(await r.text());
     return (rows.length||optional) ? rows : fallback;
@@ -166,7 +178,8 @@ function buildReqRegistry(rows) {
       description:getField(row,'description','Description'),
       instruction:getField(row,'instruction','instructions'),
       rules:getField(row,'rules'),
-      lore:getField(row,'lore','flavor')
+      lore:getField(row,'lore','flavor'),
+      submission:getField(row,'submission')
     }];
   }).filter(Boolean));
 }
@@ -180,7 +193,7 @@ function parseRank(row, index) {
     const rName=row[key].trim();
     if(!rName) return;
     const reg=S.reqRegistry.get(normKey(rName));
-    reqs.push({name:rName,description:reg?.description||'',type:reg?.type||'',instruction:reg?.instruction||'',rules:reg?.rules||'',lore:reg?.lore||'',isInfluence:false,isArcaneMastery:false,isSupremeArts:false,_order:parseInt(m[1],10)});
+    reqs.push({name:rName,description:reg?.description||'',type:reg?.type||'',instruction:reg?.instruction||'',rules:reg?.rules||'',lore:reg?.lore||'',submission:reg?.submission||'',isInfluence:false,isArcaneMastery:false,isSupremeArts:false,_order:parseInt(m[1],10)});
   });
   const ipVal=parseInt(getField(row,'influence points','influence'),10);
   if(ipVal>0) reqs.push({name:`${ipVal} Influence Points`,description:`Earn at least ${ipVal} influence points.`,type:'Influence',isInfluence:true,threshold:ipVal,_order:999});
@@ -300,6 +313,7 @@ function applyData(data) {
   const {layout,connections} = parseLayoutAndConnections(data.nodelayout);
   S.layout      = layout;
   S.connections = connections.length ? connections : S.ranks.slice(1).map((r,i)=>({from:S.ranks[i].id,to:r.id}));
+  S.searchIndex = buildSearchIndex();
 }
 
 // ─── SUPREME ARTS HELPERS ───
@@ -350,13 +364,27 @@ function getPlayerInfluenceStatRow(player) {
   });
 }
 
-function getTaskEarnedPoints(player, task) {
-  const row = getPlayerInfluenceStatRow(player);
-  if (!row) return 0;
+function getTaskValueFromRow(row, task, source = 'points') {
+  if (!row || !task) return 0;
   const tName = getField(task, 'name');
-  const val = getField(row, tName);
-  const parsed = parseInt(val, 10);
-  return isNaN(parsed) ? 0 : parsed;
+  const points = parseInt(getField(task,'points','Points')||'0',10) || 0;
+  const maxPts = parseInt(getField(task,'max point','max points','maxpoints')||String(points),10) || points;
+  const raw = getField(row, tName, `${tName} points`, `${tName} pts`, `${tName} completion`, `${tName} completions`, slugify(tName));
+  if (raw === '') return 0;
+  const parsed = parseFloat(String(raw).replace(/,/g,'').trim());
+  if (Number.isFinite(parsed)) {
+    if (source === 'completion-count') return Math.min(maxPts || parsed * points, parsed * (points || 1));
+    return parsed;
+  }
+  return isTruthy(raw) ? (maxPts || points || 1) : 0;
+}
+
+function getTaskEarnedPoints(player, task) {
+  const statVal = getTaskValueFromRow(getPlayerInfluenceStatRow(player), task, 'points');
+  if (statVal > 0) return statVal;
+  const repeatable = normKey(getField(task,'repeatability')).includes('repeat');
+  const playerVal = getTaskValueFromRow(player, task, repeatable ? 'completion-count' : 'points');
+  return playerVal;
 }
 
 // ─── BOTTOM NAVIGATION HELPER ───
@@ -538,6 +566,30 @@ function drawPaths(prog=getProgress(S.selectedPlayer)) {
 }
 
 // ─── DETAIL PANEL ───
+function getRequirementDisplayName(req) {
+  return normKey(req?.name) === 'mage duel' ? 'Mage Duel Win' : (req?.name || '');
+}
+
+function getRequirementModalRoute(req) {
+  const name = normKey(req?.name);
+  if (name.includes('blood') && name.includes('master')) return {modal:'arcane', filter:'Blood'};
+  if (name.includes('elemental') && name.includes('master')) return {modal:'arcane', filter:'Elemental'};
+  if (name === 'scarlet influence') return {modal:'influence', filter:'Scarlet'};
+  if (name === 'azure influence') return {modal:'influence', filter:'Azure'};
+  if (name === 'emerald influence') return {modal:'influence', filter:'Emerald'};
+  if (name === 'mage duel') return {modal:'hosted', filter:'Duels'};
+  return null;
+}
+
+function openRequirementRoute(req) {
+  const route = getRequirementModalRoute(req);
+  if (!route) return false;
+  if (route.modal === 'arcane') openAmModal(route.filter);
+  if (route.modal === 'influence') openInfluenceModal(route.filter);
+  if (route.modal === 'hosted') openHeModal(route.filter);
+  return true;
+}
+
 function renderReqRow(req, player, index) {
   const done=reqDone(player,req);
   const sel=S.selectedReqName===req.name;
@@ -547,7 +599,7 @@ function renderReqRow(req, player, index) {
   if(req.isSupremeArtsByType) badge = ` Arts` + ` <span class="ip-badge sa-badge">✨ ${getSaDoneCountByWay(player,req.supremeWayName)} / ${req.threshold}</span>`;
   return `<button type="button" class="req-row req-button ${done?'done':'pending'}${sel?' selected':''}" data-req-index="${index}">
     <div class="req-circle">${done?'✓':'○'}</div>
-    <div class="req-name">${esc(req.name)}${badge}</div>
+    <div class="req-name">${esc(getRequirementDisplayName(req))}${badge}</div>
   </button>`;
 }
 
@@ -594,6 +646,7 @@ function selectNode(id) {
       const idx=Number(btn.dataset.reqIndex);
       const req=rank.requirements[idx];
       if(!req) return;
+      if(openRequirementRoute(req)) return;
       if(req.isInfluence){openInfluenceModal();return;}
       if(req.isArcaneMastery){openAmModal();return;}
       if(req.isSupremeArtsByType){openSaModal(req.supremeWayName);return;}
@@ -614,16 +667,18 @@ function renderReqDetail(req) {
   if(!req){card.style.display='none';return;}
   card.style.display='';
 
-  document.getElementById('requirementDetailName').textContent=req.name;
+  document.getElementById('requirementDetailName').textContent=getRequirementDisplayName(req);
   document.getElementById('requirementDetailType').textContent=req.type?`Type: ${req.type}`:'';
   document.getElementById('requirementDetailDescription').innerHTML=parseFormatting(req.description||(req?'No description.':''));
 
-  const hasTabs = req.instruction||req.rules||req.lore;
+  const hasTabs = req.instruction||req.rules||req.lore||req.submission;
   const tabsEl = document.getElementById('reqTabs');
   const contentEl = document.getElementById('reqTabContent');
 
   if(hasTabs) {
     tabsEl.style.display='';
+    const validTabs = ['instruction','rules','lore','submission'];
+    if (!getReqTabValue(req, S.activeReqTab)) S.activeReqTab = validTabs.find(t => !!getReqTabValue(req, t)) || 'instruction';
     renderReqTab(req, S.activeReqTab);
 
     tabsEl.querySelectorAll('.req-tab').forEach(btn=>{
@@ -637,13 +692,34 @@ function renderReqDetail(req) {
   } else {
     tabsEl.style.display='none';
     contentEl.innerHTML='';
+    const copyBtn = document.getElementById('reqCopySubmissionBtn');
+    if (copyBtn) copyBtn.style.display = 'none';
   }
+}
+
+function getReqTabValue(req, tab) {
+  if (tab === 'instruction') return req.instruction;
+  if (tab === 'rules') return req.rules;
+  if (tab === 'submission') return req.submission;
+  return req.lore;
 }
 
 function renderReqTab(req, tab) {
   const contentEl=document.getElementById('reqTabContent');
-  const val = tab==='instruction'?req.instruction:tab==='rules'?req.rules:req.lore;
+  const val = getReqTabValue(req, tab);
   contentEl.innerHTML = val ? parseFormatting(val) : '<span style="color:var(--text3);font-style:italic">No content available.</span>';
+
+  const copyBtn = document.getElementById('reqCopySubmissionBtn');
+  if (copyBtn) {
+    if (tab === 'submission' && val) {
+      copyBtn.style.display = '';
+      copyBtn.disabled = false;
+      copyBtn.textContent = 'Copy Submission';
+      copyBtn.onclick = () => copySubmissionText(val, copyBtn);
+    } else {
+      copyBtn.style.display = 'none';
+    }
+  }
 }
 
 // ─── INFLUENCE MODAL (EXPANDED DASHBOARD) ───
@@ -734,7 +810,20 @@ function buildTrackAmData() {
   return Object.values(trackMap);
 }
 
-function openInfluenceModal() {
+function selectOptionByNormalizedText(selectEl, desired) {
+  if (!selectEl || !desired) return false;
+  const want = normKey(desired);
+  const option = Array.from(selectEl.options).find(opt => {
+    const value = normKey(opt.value);
+    const label = normKey(opt.textContent);
+    return value === want || label === want || value.startsWith(want) || label.startsWith(want);
+  });
+  if (!option) return false;
+  selectEl.value = option.value;
+  return true;
+}
+
+function openInfluenceModal(filter = '') {
   const player = S.selectedPlayer;
   const stats = getIpTaskStats(player);
 
@@ -776,6 +865,10 @@ function openInfluenceModal() {
   });
   const dynamicTypes = [...typeSet].sort();
   typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  if (filter) {
+    const matchedType = selectOptionByNormalizedText(typeSel, filter);
+    if (!matchedType) selectOptionByNormalizedText(catSel, filter);
+  }
 
   renderSectionInfo('ipSectionDesc','ipSectionAnnouncement','ipSectionAnnouncementText','ipSectionInfo','influence_modal');
   renderIpTaskList();
@@ -837,6 +930,7 @@ function renderIpTaskList() {
           const name  = getField(t,'name');
           const desc  = getField(t,'description','Description');
           const notes = getField(t,'notes','Notes');
+          const submission = getField(t,'submission');
           const maxPts = parseInt(getField(t,'max point','max points','maxpoints')||getField(t,'points','Points')||'0',10);
           const rep   = getField(t,'repeatability');
           const types = getIpTypes(t);
@@ -855,6 +949,7 @@ function renderIpTaskList() {
               <div class="ip-name">${esc(name)}</div>
               ${desc?`<div class="ip-desc">${parseFormatting(desc)}</div>`:''}
               ${notes?`<div class="ip-notes"><strong>Notes:</strong> ${parseFormatting(notes)}</div>`:''}
+              ${submission?`<button class="copy-btn inline-copy-btn" type="button" data-copy-submission="${esc(submission)}">Copy Submission</button>`:''}
               ${types.length?`<div class="ip-tags">${types.map(t=>`<span class="ip-tag">${esc(t)}</span>`).join('')}</div>`:''}
             </div>
             ${rep?`<div class="ip-repeat">${esc(rep)}</div>`:''}
@@ -864,7 +959,14 @@ function renderIpTaskList() {
       </div>
     </div>`;
   }
-  document.getElementById('ipTaskList').innerHTML=html;
+  const listEl = document.getElementById('ipTaskList');
+  listEl.innerHTML=html;
+  listEl.querySelectorAll('[data-copy-submission]').forEach(btn => {
+    btn.addEventListener('click', event => {
+      event.stopPropagation();
+      copySubmissionText(btn.dataset.copySubmission, btn);
+    });
+  });
 }
 
 function clearIpFilters() {
@@ -896,7 +998,7 @@ function closeInfluenceModal() {
 }
 
 // ─── ARCANE MASTERY MODAL ───
-function openAmModal() {
+function openAmModal(filter = '') {
   const player = S.selectedPlayer;
   const total = S.arcaneMastery.length;
   const done = getAmDoneCount(player);
@@ -914,6 +1016,7 @@ function openAmModal() {
   S.arcaneMastery.forEach(q => getAmTypes(q).forEach(type => { if (type.trim()) typeSet.add(type.trim()); }));
   const dynamicTypes = [...typeSet].sort();
   typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  selectOptionByNormalizedText(typeSel, filter);
 
   const tracks = buildTrackAmData();
   const tracksEl = document.getElementById('amTracks');
@@ -1196,7 +1299,7 @@ function buildTrackHeData() {
   return Object.values(trackMap);
 }
 
-function openHeModal() {
+function openHeModal(filter = '') {
   const player = S.selectedPlayer;
   const stats = getHeStatSummary(player);
 
@@ -1211,6 +1314,7 @@ function openHeModal() {
   S.hostedEvents.forEach(q => getHeTypes(q).forEach(type => { if (type.trim()) typeSet.add(type.trim()); }));
   const dynamicTypes = [...typeSet].sort();
   typeSel.innerHTML = `<option value="">All Types</option>` + dynamicTypes.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  selectOptionByNormalizedText(typeSel, filter);
 
   const tracks = buildTrackHeData();
   const tracksEl = document.getElementById('heTracks');
@@ -1392,27 +1496,53 @@ function closeSearchModal() {
   setBnavActive('map');
 }
 
+function rowSearchText(row, skipKeys = []) {
+  const skip = new Set(skipKeys.map(normKey));
+  return Object.entries(row || {})
+    .filter(([k,v]) => !skip.has(normKey(k)) && String(v || '').trim())
+    .map(([k,v]) => `${k}: ${v}`)
+    .join(' • ');
+}
+
+function addSearchItem(items, {type, icon, label, sub='', badge, data}) {
+  if (!label && !sub) return;
+  const haystack = normKey(`${label} ${sub} ${badge || ''}`);
+  items.push({type, icon, label: label || badge || 'Untitled', sub, badge, data, haystack});
+}
+
 function buildSearchIndex() {
   const items=[];
 
   S.ranks.forEach(r=>{
-    items.push({type:'rank',icon:'⬡',label:r.name,sub:r.description||r.lore||'',badge:'Rank',data:r});
+    addSearchItem(items,{type:'rank',icon:'⬡',label:r.name,sub:[r.description,r.lore,r.requirements.map(q=>q.name).join(' '),r.rewards.map(rw=>rw.name).join(' ')].filter(Boolean).join(' • '),badge:'Rank',data:r});
+    r.rewards.forEach(rw=>{
+      addSearchItem(items,{type:'reward',icon:'✦',label:rw.name,sub:rw.description||`Reward from ${r.name}`,badge:'Reward',data:{...rw,rankId:r.id,rankName:r.name}});
+    });
   });
 
   S.reqRegistry.forEach(req=>{
-    items.push({type:'req',icon:'📋',label:req.name,sub:req.description||'',badge:req.type||'Requirement',data:req});
+    addSearchItem(items,{type:'req',icon:'📋',label:req.name,sub:rowSearchText(req, ['name']),badge:req.type||'Requirement',data:req});
   });
 
   S.influenceTasks.forEach(t=>{
     const name=getField(t,'name');
-    if(!name) return;
-    items.push({type:'task',icon:'🔮',label:name,sub:getField(t,'description','Description')||'',badge:`+${getField(t,'points','Points')||'?'} pts`,data:t});
+    addSearchItem(items,{type:'task',icon:'🔮',label:name,sub:rowSearchText(t, ['name']),badge:`Influence ${getField(t,'points','Points')?`+${getField(t,'points','Points')} pts`:''}`.trim(),data:t});
   });
 
-  S.ranks.forEach(r=>{
-    r.rewards.forEach(rw=>{
-      items.push({type:'reward',icon:'✦',label:rw.name,sub:rw.description||`Reward from ${r.name}`,badge:'Reward',data:{...rw,rankId:r.id,rankName:r.name}});
-    });
+  S.arcaneMastery.forEach(q=>{
+    addSearchItem(items,{type:'arcane',icon:'🧙‍♂️',label:getField(q,'name'),sub:rowSearchText(q, ['name']),badge:'Arcane Mastery',data:q});
+  });
+
+  S.hostedEvents.forEach(q=>{
+    addSearchItem(items,{type:'hosted',icon:'🌀',label:getField(q,'name'),sub:rowSearchText(q, ['name']),badge:'Hosted Event',data:q});
+  });
+
+  S.supremeArts.forEach(q=>{
+    addSearchItem(items,{type:'supreme',icon:'✨',label:getField(q,'name','Player Name'),sub:rowSearchText(q, ['name','Player Name']),badge:'Supreme Arts',data:q});
+  });
+
+  S.sections.forEach((section, key)=>{
+    addSearchItem(items,{type:'section',icon:'📢',label:key,sub:[section.description, section.announcement].filter(Boolean).join(' • '),badge:'Section Info',data:section});
   });
 
   return items;
@@ -1427,20 +1557,27 @@ function runSearch(query) {
     return;
   }
 
-  const index=buildSearchIndex();
-  const matches=index.filter(item=>
-    item.label.toLowerCase().includes(q)||
-    item.sub.toLowerCase().includes(q)||
-    item.badge.toLowerCase().includes(q)
-  );
+  const queryNorm = normKey(q);
+  const terms = queryNorm.split(' ').filter(Boolean);
+  const matches=(S.searchIndex.length ? S.searchIndex : buildSearchIndex())
+    .map(item => {
+      const haystack = item.haystack || normKey(`${item.label} ${item.sub} ${item.badge}`);
+      if (!terms.every(term => haystack.includes(term))) return null;
+      const label = normKey(item.label);
+      const score = (label === queryNorm ? 30 : label.startsWith(queryNorm) ? 20 : label.includes(queryNorm) ? 10 : 0) + terms.reduce((sum,term)=>sum + (haystack.includes(term)?1:0),0);
+      return {...item, score};
+    })
+    .filter(Boolean)
+    .sort((a,b)=>b.score-a.score || a.label.localeCompare(b.label))
+    .slice(0,80);
 
   if(!matches.length){
     resultsEl.innerHTML=`<div class="search-no-results">No results for "<strong>${esc(query)}</strong>"</div>`;
     return;
   }
 
-  const groups={rank:[],req:[],task:[],reward:[]};
-  const groupLabels={rank:'Ranks',req:'Requirements',task:'Influence Tasks',reward:'Rewards'};
+  const groups={rank:[],req:[],task:[],arcane:[],hosted:[],supreme:[],reward:[],section:[]};
+  const groupLabels={rank:'Ranks',req:'Requirements',task:'Influence Tasks',arcane:'Arcane Mastery',hosted:'Hosted Events',supreme:'Supreme Arts',reward:'Rewards',section:'Section Info'};
   matches.forEach(m=>groups[m.type]?.push(m));
 
   let html='';
@@ -1501,6 +1638,15 @@ function handleSearchSelect(type, label) {
         }
       }, 150);
     }
+  } else if(type==='arcane'){
+    openAmModal();
+    setTimeout(()=>{ const quest=S.arcaneMastery.find(q=>getField(q,'name')===label); if(quest) openAmQuestDetail(quest); }, 0);
+  } else if(type==='hosted'){
+    openHeModal();
+    setTimeout(()=>{ const quest=S.hostedEvents.find(q=>getField(q,'name')===label); if(quest) openHeQuestDetail(quest); }, 0);
+  } else if(type==='supreme'){
+    openSaModal();
+    setTimeout(()=>{ const quest=S.supremeArts.find(q=>getField(q,'name','Player Name')===label); if(quest) openSaQuestDetail(quest); }, 0);
   } else if(type==='reward'){
     const rank=S.ranks.find(r=>r.rewards.some(rw=>rw.name===label));
     if(rank){
@@ -1792,10 +1938,10 @@ async function init() {
   topbarSearchInput.addEventListener('input',e=>{
     if(!document.getElementById('searchModal').classList.contains('open')) openSearchModal(e.target.value);
   });
-  document.getElementById('influenceNavBtn').addEventListener('click',openInfluenceModal);
-  document.getElementById('arcaneNavBtn').addEventListener('click',openAmModal);
-  document.getElementById('hostedNavBtn').addEventListener('click',openHeModal);
-  document.getElementById('supremeNavBtn').addEventListener('click',openSaModal);
+  document.getElementById('influenceNavBtn').addEventListener('click',()=>openInfluenceModal());
+  document.getElementById('arcaneNavBtn').addEventListener('click',()=>openAmModal());
+  document.getElementById('hostedNavBtn').addEventListener('click',()=>openHeModal());
+  document.getElementById('supremeNavBtn').addEventListener('click',()=>openSaModal());
 
   // Hosted Events modal
   document.getElementById('heModalClose').addEventListener('click',closeHeModal);
@@ -1857,7 +2003,7 @@ async function init() {
 
   initBottomNav();
   renderApp();
-  setInterval(refresh,60000);
+  setInterval(()=>{ if(!document.hidden) refresh(); },300000);
 }
 
 let rafResize;
