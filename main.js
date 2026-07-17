@@ -68,7 +68,8 @@ let S = {
 const slugify   = v => String(v||'').trim().toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 const esc       = v => String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const normKey   = v => String(v||'').trim().toLowerCase().replace(/\s+/g,' ').replace(/[^\x20-\x7E]/g,'');
-const isTruthy  = v => ['true','yes','y','1','complete','completed','done'].includes(String(v).trim().toLowerCase());
+const compactKey = v => normKey(v).replace(/[^a-z0-9]+/g,'');
+const isTruthy  = v => ['true','yes','y','1','complete','completed','done','x','✓','checked'].includes(String(v).trim().toLowerCase());
 const splitList = v => String(v||'').split(/[;|\n]+/).map(s=>s.trim()).filter(Boolean);
 const cleanIcon = v => String(v||'').split('/').pop().replace(/[^a-zA-Z0-9._-]/g,'')||'default.png';
 
@@ -98,7 +99,14 @@ function getFieldMap(row) {
   if (!row || typeof row !== 'object') return new Map();
   let map = fieldCache.get(row);
   if (!map) {
-    map = new Map(Object.entries(row).map(([k,v]) => [normKey(k), v]));
+    map = new Map();
+    Object.entries(row).forEach(([key, value]) => {
+      map.set(normKey(key), value);
+      // Sheet headers are often edited with punctuation or line breaks. Keep a
+      // compact alias so "Mage Duel - Win" and "Mage Duel Win" still match.
+      const compact = compactKey(key);
+      if (compact && !map.has(compact)) map.set(compact, value);
+    });
     fieldCache.set(row, map);
   }
   return map;
@@ -110,6 +118,8 @@ function getField(row, ...names) {
   for (const name of names) {
     const val = fields.get(normKey(name));
     if (val !== undefined) return val;
+    const compactVal = fields.get(compactKey(name));
+    if (compactVal !== undefined) return compactVal;
   }
   return '';
 }
@@ -357,19 +367,36 @@ function getPlayerSupremeStatRow(player) {
 // ─── INFLUENCE STAT ROW MATCHERS ───
 function getPlayerInfluenceStatRow(player) {
   if (!player || !S.influenceStat.length) return null;
-  const pName = normKey(getPlayerName(player));
+  const playerIds = getPlayerIdentityValues(player);
   return S.influenceStat.find(row => {
-    const rowName = getField(row, 'Player Name', 'player', 'name');
-    return normKey(rowName) === pName;
+    const rowIds = getPlayerIdentityValues(row);
+    return [...rowIds].some(id => playerIds.has(id));
   });
+}
+
+function getPlayerIdentityValues(row) {
+  const fields = [
+    'Player Name', 'player', 'name', 'minecraft username', 'minecraft name',
+    'mc username', 'mc name', 'username', 'discord', 'discord username', 'uuid'
+  ];
+  return new Set(fields.map(field => compactKey(getField(row, field))).filter(Boolean));
+}
+
+function getTaskFieldNames(task) {
+  const name = getField(task, 'name');
+  const configuredField = getField(task, 'tracker field', 'tracking field', 'tracker column', 'tracking column', 'stat column');
+  return [
+    configuredField, name, `${name} points`, `${name} pts`,
+    `${name} completion`, `${name} completions`, `${name} count`,
+    `${name} completion count`, `${name} completed`, slugify(name)
+  ].filter(Boolean);
 }
 
 function getTaskValueFromRow(row, task, source = 'points') {
   if (!row || !task) return 0;
-  const tName = getField(task, 'name');
   const points = parseInt(getField(task,'points','Points')||'0',10) || 0;
   const maxPts = parseInt(getField(task,'max point','max points','maxpoints')||String(points),10) || points;
-  const raw = getField(row, tName, `${tName} points`, `${tName} pts`, `${tName} completion`, `${tName} completions`, slugify(tName));
+  const raw = getField(row, ...getTaskFieldNames(task));
   if (raw === '') return 0;
   const parsed = parseFloat(String(raw).replace(/,/g,'').trim());
   if (Number.isFinite(parsed)) {
@@ -380,9 +407,11 @@ function getTaskValueFromRow(row, task, source = 'points') {
 }
 
 function getTaskEarnedPoints(player, task) {
-  const statVal = getTaskValueFromRow(getPlayerInfluenceStatRow(player), task, 'points');
-  if (statVal > 0) return statVal;
   const repeatable = normKey(getField(task,'repeatability')).includes('repeat');
+  // Individual task values are normally stored on the influence-stat tab. For
+  // repeatable tasks those values are completion counts, not earned points.
+  const statVal = getTaskValueFromRow(getPlayerInfluenceStatRow(player), task, repeatable ? 'completion-count' : 'points');
+  if (statVal > 0) return statVal;
   const playerVal = getTaskValueFromRow(player, task, repeatable ? 'completion-count' : 'points');
   return playerVal;
 }
